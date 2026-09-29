@@ -1,0 +1,15 @@
+{
+  "id": "/",
+  "name": "Check — Student Workspace",
+  "short_name": "Check",
+  "description": "A calmer place for classes, tasks, focus, and everything you’re becoming.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#faf9f7",
+  "theme_color": "#faf9f7",
+  "icons": [
+    { "src": "/icons/check.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
