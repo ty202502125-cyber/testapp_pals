@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import './pwa.css'
+import './responsive.css'
 import AITutor from './components/AITutor.jsx'
 import AccountDialog from './components/AccountDialog.jsx'
 import ScheduleCalendar from './components/ScheduleCalendar.jsx'
@@ -181,7 +182,7 @@ function App() {
         <div className="workspace"><div className="avatar">A</div><div><strong>Alex Morgan</strong><small>Spring semester ’25</small></div><span className="chevron">⌄</span></div>
         <div className="nav-label">WORKSPACE</div>
         <nav className="nav-list" aria-label="Main navigation">{nav.map(([label, icon]) => <button key={label} title={label} aria-label={label} className={`nav-item${page === label ? ' selected' : ''}`} onClick={() => setPage(label)}><span className="nav-icon" aria-hidden="true">{icon}</span>{label}{label === 'My tasks' && <span className="nav-count">{activeTasks.length}</span>}</button>)}</nav>
-        <div className="sidebar-bottom"><div className="streak-card"><div className="streak-top"><span>✳</span><span className="streak-days">4 day streak</span><span>↗</span></div><strong>You’re on a roll!</strong><small>A little progress adds up.</small><div className="streak-bars">{[1, 1, 1, 1, 0, 0, 0].map((active, i) => <i key={i} className={active ? 'active' : ''} />)}</div></div><button className="nav-item" onClick={() => setDark((value) => !value)}><span className="nav-icon">◐</span>{dark ? 'Light appearance' : 'Dark appearance'}</button><button className="nav-item install-side" onClick={install}><span className="nav-icon">↓</span>Install the app<span className="install-arrow">↗</span></button><div className="sidebar-foot"><span>◌</span> Made for your next big thing</div></div>
+        <div className="sidebar-bottom"><div className="streak-card"><div className="streak-top"><span>✳</span><span className="streak-days">4 day streak</span><span>↗</span></div><strong>You’re on a roll!</strong><small>A little progress adds up.</small><div className="streak-bars">{[1, 1, 1, 1, 0, 0, 0].map((active, i) => <i key={i} className={active ? 'active' : ''} />)}</div></div><button type="button" className="nav-item theme-toggle" aria-pressed={dark} onClick={() => setDark((value) => !value)}><span className="nav-icon" aria-hidden="true">{dark ? <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg> : <svg viewBox="0 0 24 24"><path d="M20.5 15.2A8.5 8.5 0 0 1 8.8 3.5 8.5 8.5 0 1 0 20.5 15.2Z"/></svg>}</span><span className="theme-label">{dark ? 'Light appearance' : 'Dark appearance'}</span></button><button className="nav-item install-side" onClick={install}><span className="nav-icon">↓</span><span className="install-label">Install the app</span><span className="install-arrow">↗</span></button><div className="sidebar-foot"><span>◌</span> Made for your next big thing</div></div>
       </aside>
 
       <main className="main-area">
