@@ -5,6 +5,10 @@ import './responsive.css'
 import AITutor from './components/AITutor.jsx'
 import AccountDialog from './components/AccountDialog.jsx'
 import ScheduleCalendar from './components/ScheduleCalendar.jsx'
+import TaskEditor from './components/TaskEditor.jsx'
+import TaskDeleteDialog from './components/TaskDeleteDialog.jsx'
+import TaskList from './components/TaskList.jsx'
+import { deleteCalendarTask, expandTaskOccurrences, localDateKey, saveCalendarTask } from './services/calendarTasks.js'
 import { connectGoogle, preloadGoogleIdentity, revokeGoogleToken, saveGoogleData } from './services/googleDrive.js'
 
 const nav = [ ['Overview','⌂'], ['My schedule','▦'], ['My tasks','☷'], ['Study materials','▧'], ['Flashcards','▤'], ['Study room','◷'], ['Grade tracker','◉'] ]
@@ -33,10 +37,8 @@ function App() {
   const [tasks, setTasks] = useState(() => read('check-tasks', seedTasks))
   const [cards, setCards] = useState(() => read('check-cards', initialCards))
   const [note, setNote] = useState(() => localStorage.getItem('check-note') || '')
-  const [showAdd, setShowAdd] = useState(false)
-  const [newTask, setNewTask] = useState('')
-  const [newTaskDate, setNewTaskDate] = useState('')
-  const [newTaskTime, setNewTaskTime] = useState('')
+  const [taskEditor, setTaskEditor] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
   const [alarmTitle, setAlarmTitle] = useState('Time to check in with yourself.')
   const [installPrompt, setInstallPrompt] = useState(null)
   const [installHint, setInstallHint] = useState(false)
@@ -54,11 +56,21 @@ function App() {
   const cloudFileId = useRef(null)
   const [alarm, setAlarm] = useState(false)
   const [toast, setToast] = useState('')
+  const [remindersEnabled, setRemindersEnabled] = useState(() => read('check-reminders-enabled', true))
+  const [notificationPermission, setNotificationPermission] = useState(() => ('Notification' in window ? Notification.permission : 'unsupported'))
+  const [reminderSoundEnabled, setReminderSoundEnabled] = useState(() => read('check-reminder-sound', true))
 
   useEffect(() => { localStorage.setItem('check-tasks', JSON.stringify(tasks)) }, [tasks])
   useEffect(() => { localStorage.setItem('check-cards', JSON.stringify(cards)) }, [cards])
   useEffect(() => { localStorage.setItem('check-note', note) }, [note])
   useEffect(() => { localStorage.setItem('check-dark', JSON.stringify(dark)) }, [dark])
+  useEffect(() => { localStorage.setItem('check-reminders-enabled', JSON.stringify(remindersEnabled)) }, [remindersEnabled])
+  useEffect(() => { localStorage.setItem('check-reminder-sound', JSON.stringify(reminderSoundEnabled)) }, [reminderSoundEnabled])
+  useEffect(() => {
+    const refreshPermission = () => setNotificationPermission('Notification' in window ? Notification.permission : 'unsupported')
+    document.addEventListener('visibilitychange', refreshPermission)
+    return () => document.removeEventListener('visibilitychange', refreshPermission)
+  }, [])
   useEffect(() => { if (googleClientId) preloadGoogleIdentity().catch(() => {}) }, [])
   useEffect(() => {
     if (!googleToken || !cloudReady) return undefined
@@ -71,28 +83,34 @@ function App() {
     return () => window.clearTimeout(timer)
   }, [googleToken, cloudReady, tasks, cards, note, dark])
   useEffect(() => {
-    if (!('Notification' in window) || Notification.permission !== 'granted') return undefined
+    if (!remindersEnabled || notificationPermission !== 'granted') return undefined
     const checkReminders = () => {
       const now = Date.now()
-      const due = tasks.filter((task) => task.dueAt && !task.done && !task.notifiedAt && new Date(task.dueAt).getTime() <= now)
-      if (!due.length) return
-      setAlarmTitle(due[0].title)
-      setAlarm(true)
-      due.forEach((task) => {
-        const title = `Check reminder: ${task.title}`
-        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-          navigator.serviceWorker.ready.then((registration) => registration.showNotification(title, { body: 'Your task is due now.', icon: '/icons/check.svg', tag: `task-${task.id}`, data: { url: '/' } })).catch(() => {})
-        } else {
-          try { new Notification(title, { body: 'Your task is due now.', icon: '/icons/check.svg', tag: `task-${task.id}` }) } catch { /* Notifications may be unavailable in this browser. */ }
-        }
+      const from = new Date(now - 24 * 60 * 60 * 1000)
+      const to = new Date(now + 32 * 24 * 60 * 60 * 1000)
+      const due = expandTaskOccurrences(tasks.filter((task) => task.reminderMinutes != null), from, to)
+        .filter((item) => !item.done && Number.isFinite(item.reminderMinutes))
+        .map((item) => ({ ...item, reminderAt: new Date(item.dueAt).getTime() - item.reminderMinutes * 60000 }))
+        .filter((item) => item.reminderAt <= now && item.reminderAt > now - 24 * 60 * 60 * 1000)
+      const delivered = new Set(read('check-reminder-deliveries', []))
+      const fresh = due.filter((item) => !delivered.has(`${item.occurrenceId}@${item.dueAt}#${item.reminderMinutes}`))
+      if (!fresh.length) return
+      fresh.forEach((item) => {
+        const dueLabel = new Intl.DateTimeFormat(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' }).format(new Date(item.dueAt))
+        const title = 'Task reminder'
+        const options = { body: `${item.title}\nDue ${dueLabel}`, icon: '/icons/check.svg', tag: `task-${item.occurrenceId}`, data: { url: '/' } }
+        if ('serviceWorker' in navigator) navigator.serviceWorker.ready.then((registration) => registration.showNotification(title, options)).catch(() => {})
+        else { try { new Notification(title, options) } catch { /* Notifications may be unavailable. */ } }
       })
-      const ids = new Set(due.map((task) => task.id))
-      setTasks((items) => items.map((task) => ids.has(task.id) ? { ...task, notifiedAt: new Date().toISOString() } : task))
+      fresh.forEach((item) => delivered.add(`${item.occurrenceId}@${item.dueAt}#${item.reminderMinutes}`))
+      localStorage.setItem('check-reminder-deliveries', JSON.stringify([...delivered].slice(-500)))
+      setAlarmTitle(fresh[0].title)
+      setAlarm(true)
     }
     checkReminders()
     const interval = window.setInterval(checkReminders, 15000)
     return () => window.clearInterval(interval)
-  }, [tasks])
+  }, [tasks, remindersEnabled, notificationPermission])
   useEffect(() => {
     const handler = (event) => { event.preventDefault(); setInstallPrompt(event) }
     window.addEventListener('beforeinstallprompt', handler)
@@ -111,7 +129,7 @@ function App() {
     return () => window.clearInterval(id)
   }, [timerOn, timerMode])
   useEffect(() => { if (!toast) return undefined; const id = setTimeout(() => setToast(''), 3200); return () => clearTimeout(id) }, [toast])
-  useEffect(() => { if (!alarm) return undefined; const id = window.setInterval(() => { try { const ctx = new AudioContext(); const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.connect(gain); gain.connect(ctx.destination); osc.frequency.value = 740; gain.gain.value = .08; osc.start(); osc.stop(ctx.currentTime + .25); osc.onended = () => ctx.close() } catch { /* Audio may be unavailable until the user interacts. */ } }, 950); return () => clearInterval(id) }, [alarm])
+  useEffect(() => { if (!alarm || !reminderSoundEnabled) return undefined; const id = window.setInterval(() => { try { const ctx = new AudioContext(); const osc = ctx.createOscillator(); const gain = ctx.createGain(); osc.connect(gain); gain.connect(ctx.destination); osc.frequency.value = 740; gain.gain.value = .08; osc.start(); osc.stop(ctx.currentTime + .25); osc.onended = () => ctx.close() } catch { /* Audio may be unavailable until the user interacts. */ } }, 950); return () => clearInterval(id) }, [alarm, reminderSoundEnabled])
 
   const completed = tasks.filter((task) => task.done).length
   const activeTasks = tasks.filter((task) => !task.done)
@@ -152,20 +170,63 @@ function App() {
     setAccountDialog(false)
     setToast('Signed out. Your data is still saved on this device.')
   }
-  const addTask = (event) => {
-    event.preventDefault()
-    if (!newTask.trim()) return
-    if (Boolean(newTaskDate) !== Boolean(newTaskTime)) { setToast('Choose both a date and a time for the reminder.'); return }
-    const dueAt = newTaskDate && newTaskTime ? new Date(`${newTaskDate}T${newTaskTime}`).toISOString() : undefined
-    if (dueAt && new Date(dueAt).getTime() <= Date.now()) { setToast('Choose a reminder time in the future.'); return }
-    const create = () => {
-      setTasks((items) => [{ id: Date.now(), title: newTask.trim(), subject: 'Personal', due: dueAt ? '' : 'No reminder', dueAt, done: false, color: 'blue' }, ...items])
-      setNewTask(''); setNewTaskDate(''); setNewTaskTime(''); setShowAdd(false)
-      setToast(dueAt ? 'Task saved. Check will notify you at the set time while the app is open.' : 'Task added to your list.')
+  const openTaskEditor = (initialDate = localDateKey(new Date())) => setTaskEditor({ mode: 'create', initialDate })
+  const setShowAdd = (value) => { if (value) openTaskEditor(); else setTaskEditor(null) }
+  const editTask = (task) => setTaskEditor({ mode: 'edit', task, occurrenceDate: task.occurrenceDate })
+  const toggleTaskOccurrence = (occurrence) => setTasks((items) => items.map((item) => {
+    if (item.id !== occurrence.id) return item
+    if (!item.recurrence?.frequency || item.recurrence.frequency === 'none') return { ...item, done: !item.done }
+    const completed = new Set(item.completedOccurrences || [])
+    if (completed.has(occurrence.occurrenceDate)) completed.delete(occurrence.occurrenceDate)
+    else completed.add(occurrence.occurrenceDate)
+    return { ...item, completedOccurrences: [...completed] }
+  }))
+  const saveTask = (draft, scope) => {
+    if (taskEditor.mode === 'create') {
+      setTasks((items) => saveCalendarTask(items, taskEditor, draft, scope))
+      setToast('Task added to your calendar.')
+    } else if (scope === 'occurrence' && taskEditor.task.recurrence?.frequency) {
+      setTasks((items) => saveCalendarTask(items, taskEditor, draft, scope))
+      setToast('This occurrence was updated.')
+    } else {
+      setTasks((items) => saveCalendarTask(items, taskEditor, draft, scope))
+      setToast('Task changes saved.')
     }
-    if (dueAt && 'Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission().then(() => create()).catch(() => create())
-    } else create()
+    setTaskEditor(null)
+  }
+  const deleteTask = (scope) => {
+    const target = deleteTarget
+    if ('serviceWorker' in navigator) navigator.serviceWorker.ready.then(async (registration) => {
+      const notifications = await registration.getNotifications()
+      notifications.forEach((notification) => {
+        const prefix = `task-${target.id}@`
+        if (!notification.tag?.startsWith(prefix)) return
+        const occurrenceDate = notification.tag.slice(prefix.length)
+        if (scope === 'series' || (scope === 'future' && occurrenceDate >= target.occurrenceDate) || occurrenceDate === target.occurrenceDate) notification.close()
+      })
+    }).catch(() => {})
+    setTasks((items) => deleteCalendarTask(items, target, scope))
+    setDeleteTarget(null)
+    setToast(scope === 'occurrence' ? 'Occurrence removed.' : 'Task removed from your calendar.')
+  }
+  const changeNotificationSetting = async () => {
+    if (notificationPermission === 'unsupported') { setToast('This browser does not support notifications.'); return }
+    if (notificationPermission === 'denied') {
+      const permission = Notification.permission
+      setNotificationPermission(permission)
+      if (permission === 'granted') { setRemindersEnabled(true); setToast('Task reminders are on.') }
+      else setToast('Notifications are blocked by your browser. Enable them in this site’s settings.')
+      return
+    }
+    if (notificationPermission === 'default') {
+      const permission = await Notification.requestPermission().catch(() => 'denied')
+      setNotificationPermission(permission)
+      setRemindersEnabled(permission === 'granted')
+      setToast(permission === 'granted' ? 'Task reminders are on.' : 'Notifications were not enabled.')
+      return
+    }
+    setRemindersEnabled((enabled) => !enabled)
+    setToast(remindersEnabled ? 'Task reminders are paused.' : 'Task reminders are on.')
   }
   const rateCard = (rating) => {
     const days = rating <= 1 ? 1 : rating === 2 ? 2 : rating === 3 ? 3 : 6
@@ -191,15 +252,16 @@ function App() {
           {page === 'Overview' ? <>
             <div className="greeting-row"><div><div className="eyebrow">{todayLong.toUpperCase()} <span className="sun">☼</span></div><h1>Good morning, Alex <span className="wave">✳</span></h1><p className="subheading">A fresh day, a fresh chance to make it count.</p></div><button className="primary-button" onClick={() => setShowAdd(true)}><span>＋</span> Add a task</button></div>
             <div className="summary-grid"><div className="summary-card"><div className="summary-head">Things to do <span className="summary-symbol purple">☷</span></div><div className="summary-value">{activeTasks.length}<span> tasks</span></div><div className="summary-foot">{completed} completed today <span className="tiny-progress"><i style={{ width: `${tasks.length ? completed / tasks.length * 100 : 0}%` }} /></span></div></div><div className="summary-card"><div className="summary-head">Focus time <span className="summary-symbol yellow">◷</span></div><div className="summary-value">2<span>h </span>40<span>m</span></div><div className="summary-foot">↑ 35 min <span className="muted">vs. last week</span></div></div><div className="summary-card"><div className="summary-head">Cards to review <span className="summary-symbol mint">▤</span></div><div className="summary-value">{cards.filter(cardIsDue).length}<span> cards</span></div><button className="inline-link" onClick={() => { setReviewing(true); setRevealed(false) }}>Start a quick review <span>→</span></button></div></div>
-            <div className="content-grid"><section className="panel tasks-panel"><div className="panel-heading"><div><h2>Today’s tasks <span className="heading-count">{activeTasks.length}</span></h2><p>A small step is still a step forward.</p></div><button className="more-button" onClick={() => setPage('My tasks')}>See all <span>→</span></button></div><div className="task-list">{tasks.slice(0, 4).map((task) => <div className={`task-row${task.done ? ' task-done' : ''}`} key={task.id}><button className={`check-circle ${task.done ? 'checked' : ''}`} aria-label={task.done ? 'Mark incomplete' : 'Complete task'} onClick={() => setTasks((items) => items.map((item) => item.id === task.id ? { ...item, done: !item.done } : item))}>{task.done && '✓'}</button><div className="task-copy"><strong>{task.title}</strong><div className="task-meta"><span className={`subject-dot ${task.color}`} />{task.subject}<span className="meta-dot">·</span>{formatDue(task)}</div></div><button className="task-more" aria-label="Task options" onClick={() => setTasks((items) => items.filter((item) => item.id !== task.id))}>···</button></div>)}</div><button className="add-row" onClick={() => setShowAdd(true)}>＋ <span>Add another task</span></button></section>
+            <div className="content-grid"><section className="panel tasks-panel"><div className="panel-heading"><div><h2>Today’s tasks <span className="heading-count">{activeTasks.length}</span></h2><p>A small step is still a step forward.</p></div><button className="more-button" onClick={() => setPage('My tasks')}>See all <span>→</span></button></div><div className="task-list">{tasks.slice(0, 4).map((task) => <div className={`task-row${task.done ? ' task-done' : ''}`} key={task.id}><button className={`check-circle ${task.done ? 'checked' : ''}`} aria-label={task.done ? 'Mark incomplete' : 'Complete task'} onClick={() => setTasks((items) => items.map((item) => item.id === task.id ? { ...item, done: !item.done } : item))}>{task.done && '✓'}</button><div className="task-copy"><strong>{task.title}</strong><div className="task-meta"><span className={`subject-dot ${task.color}`} />{task.subject}<span className="meta-dot">·</span>{formatDue(task)}</div></div><button className="task-more" aria-label="Delete task" onClick={() => setDeleteTarget(task)}>···</button></div>)}</div><button className="add-row" onClick={() => setShowAdd(true)}>＋ <span>Add another task</span></button></section>
               <section className="panel schedule-panel"><div className="panel-heading"><div><h2>Coming up</h2><p>You’ve got this.</p></div><button className="calendar-button" onClick={() => setPage('My schedule')}>▦</button></div><div className="schedule-date"><span className="date-badge">{new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(today).toUpperCase()}<b>{today.getDate()}</b></span><div><strong>Today</strong><small>3 things on your schedule</small></div></div><div className="schedule-events"><div className="timeline"><span /><span /><span /></div><div className="event-list"><div className="event"><small>09:00 <i>—</i> 10:30</small><strong>Biology lecture</strong><span className="event-tag green-tag">Room 204 · Science</span></div><div className="event"><small>11:00 <i>—</i> 12:00</small><strong>Study block</strong><span className="event-tag purple-tag">Library · Quiet zone</span></div><div className="event"><small>14:30 <i>—</i> 15:30</small><strong>Calculus tutorial</strong><span className="event-tag orange-tag">Online · Zoom</span></div></div></div><button className="schedule-link" onClick={() => setPage('My schedule')}>View full schedule <span>→</span></button></section>
             </div>
             <section className="lower-grid"><div className="panel focus-panel"><div className="focus-info"><div className="focus-eyebrow"><span>✳</span> {timerMode === 'focus' ? 'FOCUS SESSION' : 'SHORT BREAK'}</div><h2>A little focus<br />goes a long way.</h2><p>Put distractions aside and be<br />present with your work.</p><button className="focus-button" onClick={() => setTimerOn((value) => !value)}>{timerOn ? 'Ⅱ Pause session' : timerMode === 'focus' ? '▶ Start focusing' : '▶ Start break'}</button></div><div className="timer-wrap"><div className={`timer-ring${timerOn ? ' running' : ''}`}><div className="timer-inner"><span>{timeLabel}</span><small>{timerOn ? (timerMode === 'focus' ? 'FOCUS ON' : 'ON A BREAK') : (timerMode === 'focus' ? 'READY TO FOCUS' : 'BREAK READY')}</small></div></div><div className="timer-caption">✦ &nbsp; 25 min focus <span>·</span> 5 min break</div></div><span className="focus-decor">✳</span></div><div className="panel note-panel"><div className="note-heading"><div className="note-icon">✎</div><div><h2>Daily note</h2><p>Get it out of your head.</p></div><span className="note-date">TODAY</span></div><textarea aria-label="Daily note" value={note} onChange={(event) => setNote(event.target.value)} placeholder="What’s on your mind today? Write a thought, make a plan, or just start..."/><div className="note-footer"><span><span className="save-dot" /> Saved automatically</span><button onClick={() => { setNote(''); setToast('Daily note cleared.') }}>Clear note</button></div></div></section>
-          </> : <SectionPage page={page} tasks={tasks} setTasks={setTasks} cards={cards} setCards={setCards} setPage={setPage} setReviewing={setReviewing} setRevealed={setRevealed} setShowAdd={setShowAdd} setSeconds={setSeconds} timerMode={timerMode} setTimerMode={setTimerMode} timerOn={timerOn} setTimerOn={setTimerOn} timeLabel={timeLabel} note={note} setNote={setNote} setToast={setToast} googleAccount={googleAccount} googleToken={googleToken} setAccountDialog={setAccountDialog} />}
+          </> : <SectionPage page={page} tasks={tasks} setTasks={setTasks} cards={cards} setCards={setCards} setPage={setPage} setReviewing={setReviewing} setRevealed={setRevealed} setShowAdd={setShowAdd} setTaskEditor={setTaskEditor} setDeleteTarget={setDeleteTarget} onEditTask={editTask} onToggleTask={toggleTaskOccurrence} setSeconds={setSeconds} timerMode={timerMode} setTimerMode={setTimerMode} timerOn={timerOn} setTimerOn={setTimerOn} timeLabel={timeLabel} note={note} setNote={setNote} setToast={setToast} googleAccount={googleAccount} googleToken={googleToken} setAccountDialog={setAccountDialog} remindersEnabled={remindersEnabled} reminderSoundEnabled={reminderSoundEnabled} onReminderSoundSetting={() => setReminderSoundEnabled((enabled) => !enabled)} notificationPermission={notificationPermission} onNotificationSetting={changeNotificationSetting} />}
           <footer className="page-footer">Made with care, for everything you’re becoming. <span>✳</span></footer>
         </div>
       </main>
-      {showAdd && <div className="modal-backdrop" onClick={() => setShowAdd(false)}><form className="modal" onSubmit={addTask} onClick={(event) => event.stopPropagation()}><button type="button" className="modal-close" onClick={() => setShowAdd(false)}>×</button><span className="modal-icon">＋</span><h2>Add a task</h2><p>One thing at a time. Set a reminder to get a notification when it’s due.</p><input autoFocus required value={newTask} onChange={(event) => setNewTask(event.target.value)} placeholder="What do you need to do?"/><div className="reminder-fields"><label>Date<input type="date" value={newTaskDate} onChange={(event) => setNewTaskDate(event.target.value)} min={new Date().toLocaleDateString('en-CA')}/></label><label>Time<input type="time" value={newTaskTime} onChange={(event) => setNewTaskTime(event.target.value)}/></label></div><small className="reminder-help">Choose both date and time. Allow notifications when your device asks.</small><button className="primary-button modal-submit" type="submit">Add task and reminder <span>→</span></button></form></div>}
+      {taskEditor && <TaskEditor key={`${taskEditor.mode}-${taskEditor.task?.id || 'new'}-${taskEditor.occurrenceDate || ''}`} initial={taskEditor} onClose={() => setTaskEditor(null)} onSave={saveTask} />}
+      {deleteTarget && <TaskDeleteDialog recurring={deleteTarget} onClose={() => setDeleteTarget(null)} onDelete={deleteTask} />}
       {installHint && <div className="modal-backdrop" onClick={() => setInstallHint(false)}><div className="modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}><button className="modal-close" aria-label="Close install instructions" onClick={() => setInstallHint(false)}>×</button><span className="modal-icon">↓</span><h2>Take Check with you</h2><p>Install this site for quick access from your home screen. In your browser menu, choose <strong>“Add to Home Screen”</strong> or <strong>“Install app.”</strong></p><button className="primary-button modal-submit" onClick={() => setInstallHint(false)}>Got it</button></div></div>}
       {accountDialog && <AccountDialog account={googleAccount} status={cloudStatus} configured={Boolean(googleClientId)} onConnect={signInWithGoogle} onDisconnect={signOutGoogle} onClose={() => setAccountDialog(false)} />}
       {reviewing && <div className="modal-backdrop" onClick={() => setReviewing(false)}><div className="modal review-modal" onClick={(event) => event.stopPropagation()}><button type="button" className="modal-close" aria-label="Close flashcard review" onClick={() => setReviewing(false)}>×</button><span className="review-count">QUICK REVIEW · {cards.filter(cardIsDue).length} LEFT</span>{currentCard ? <><button type="button" className="flashcard" aria-label="Flip flashcard" onClick={() => setRevealed((value) => !value)}><span>{revealed ? 'THE ANSWER' : 'YOUR QUESTION'}</span><strong>{revealed ? currentCard.back : currentCard.front}</strong><small>Click to {revealed ? 'see question' : 'reveal answer'}</small></button>{revealed && <div className="rating-row">{['Again','Hard','Good','Easy'].map((rating, i) => <button type="button" key={rating} onClick={() => rateCard(i + 1)}>{rating}<small>{['1d', '2d', '3d', '6d'][i]}</small></button>)}</div>}</> : <div className="empty-review"><span>✦</span><h2>All caught up!</h2><p>Your next review is scheduled. Take a well-earned breather.</p><button type="button" className="primary-button modal-submit" onClick={() => setReviewing(false)}>Done</button></div>}</div></div>}
@@ -209,8 +271,8 @@ function App() {
   )
 }
 
-function SectionPage({ page, tasks, setTasks, cards, setCards, setPage, setReviewing, setRevealed, setShowAdd, setSeconds, timerMode, setTimerMode, timerOn, setTimerOn, timeLabel, note, setNote, setToast, googleAccount, googleToken, setAccountDialog }) {
-  const [view, setView] = useState('Week')
+function SectionPage({ page, tasks, setTasks, cards, setCards, setPage, setReviewing, setRevealed, setShowAdd, setTaskEditor, setDeleteTarget, onEditTask, onToggleTask, setSeconds, timerMode, setTimerMode, timerOn, setTimerOn, timeLabel, note, setNote, setToast, googleAccount, googleToken, setAccountDialog, remindersEnabled, reminderSoundEnabled, onReminderSoundSetting, notificationPermission, onNotificationSetting }) {
+  const [view, setView] = useState(() => window.matchMedia?.('(max-width: 620px)').matches ? 'Day' : 'Week')
   const [calendarDate, setCalendarDate] = useState(() => new Date())
   const [soundName, setSoundName] = useState('')
   const audioRef = useRef(null)
@@ -266,7 +328,8 @@ function SectionPage({ page, tasks, setTasks, cards, setCards, setPage, setRevie
   useEffect(() => () => { clearInterval(soundRef.current?.interval); audioRef.current?.close() }, [])
   const subjects = [{ at: '09:00', title: 'Biology lecture', day: 2, start: 1, tone: 'green' }, { at: '11:00', title: 'Study block', day: 2, start: 3, tone: 'purple' }, { at: '14:30', title: 'Calculus tutorial', day: 2, start: 6, tone: 'orange' }, { at: '10:00', title: 'Literature seminar', day: 4, start: 2, tone: 'pink' }, { at: '13:00', title: 'Biology lab', day: 4, start: 5, tone: 'green' }, { at: '09:30', title: 'Calculus practice', day: 1, start: 1, tone: 'orange' }]
   return <div className="section-page"><div className="section-title"><div><div className="eyebrow">YOUR WORKSPACE</div><h1>{page}</h1><p className="subheading">{page === 'My schedule' ? 'Make a little room for what matters.' : page === 'My tasks' ? 'Your plans, one small step at a time.' : page === 'Flashcards' ? 'Build knowledge that sticks.' : page === 'Study room' ? 'A calmer place to do your best work.' : 'See how your effort adds up.'}</p></div>{page === 'My tasks' && <button className="primary-button" onClick={() => setShowAdd(true)}>＋ Add a task</button>}</div>
-    {page === 'My schedule' && <ScheduleCalendar date={calendarDate} view={view} onView={setView} onMove={moveCalendar} onDateSelect={(date) => { setCalendarDate(date); setView('Day') }} subjects={subjects} />}{page === 'My tasks' && <div className="panel full-panel"><div className="panel-heading"><div><h2>All tasks <span className="heading-count">{tasks.filter((task) => !task.done).length}</span></h2><p>Your to-do list is saved on this device.</p></div></div>{tasks.map((task) => <div className="task-row full-task" key={task.id}><button className={`check-circle ${task.done ? 'checked' : ''}`} onClick={() => setTasks((items) => items.map((item) => item.id === task.id ? { ...item, done: !item.done } : item))}>{task.done && '✓'}</button><div className="task-copy"><strong>{task.title}</strong><div className="task-meta">{task.subject} · {formatDue(task)}</div></div><button className="task-more" onClick={() => setTasks((items) => items.filter((item) => item.id !== task.id))}>×</button></div>)}{!tasks.length && <p className="empty-text">Nothing on your list. Enjoy the breathing room!</p>}<button className="add-row" onClick={() => setShowAdd(true)}>＋ <span>Add another task</span></button></div>}
+    {page === 'My schedule' && <ScheduleCalendar date={calendarDate} view={view} onView={setView} onMove={moveCalendar} onDateSelect={(date) => { setCalendarDate(date); setView('Day') }} subjects={subjects} tasks={tasks} onCreateTask={(date) => setTaskEditor({ mode: 'create', initialDate: date })} onEditTask={onEditTask} onDeleteTask={setDeleteTarget} onToggleTask={onToggleTask} remindersEnabled={remindersEnabled} reminderSoundEnabled={reminderSoundEnabled} onReminderSoundSetting={onReminderSoundSetting} notificationPermission={notificationPermission} onNotificationSetting={onNotificationSetting} />}
+    {page === 'My tasks' && <TaskList tasks={tasks} setTasks={setTasks} onAdd={() => setShowAdd(true)} onEdit={(task) => setTaskEditor({ mode: 'edit', task })} onDelete={setDeleteTarget} />}
     {page === 'Flashcards' && <div className="flash-layout"><div className="panel flash-summary"><span className="summary-symbol mint">▤</span><h2>{dueCards.length} cards due today</h2><p>Little and often is the way to remember. Your progress is saved right here.</p><button className="primary-button" onClick={() => { setReviewing(true); setRevealed(false) }}>Start studying <span>→</span></button><div className="deck-line"><span>Biology essentials</span><span>{cards.length} cards</span></div><div className="deck-line"><span>Mathematics · Calculus</span><span>{cards.filter((card) => card.front.includes('∫')).length} cards</span></div><button className="inline-link" onClick={() => setCards((items) => [...items, { front: 'What topic do you want to remember?', back: 'Break it into a simple question and answer, then review it often.', due: true }])}>＋ Add a sample card</button></div><div className="panel study-tip"><span className="tip-icon">✳</span><div className="eyebrow">A FRIENDLY REMINDER</div><h2>Remembering takes practice.</h2><p>Rate each card by how it felt to recall. Check will bring the harder ones back sooner.</p><div className="rating-preview">{['Again', 'Hard', 'Good', 'Easy'].map((x) => <span key={x}>{x}</span>)}</div></div></div>}
     {page === 'Study room' && <div className="study-room-grid"><div className="panel room-timer"><div className="focus-eyebrow"><span>✳</span> YOUR FOCUS SPACE</div><div className="timer-ring room-ring"><div className="timer-inner"><span>{timeLabel}</span><small>{timerOn ? (timerMode === 'focus' ? 'FOCUS ON' : 'ON A BREAK') : (timerMode === 'focus' ? 'READY TO FOCUS' : 'BREAK READY')}</small></div></div><h2>Make this moment yours.</h2><p>25 minutes of focus. Then take a breath.</p><button className="focus-button" onClick={() => setTimerOn((value) => !value)}>{timerOn ? 'Ⅱ Pause session' : '▶ Start focusing'}</button><button className="reset-timer" onClick={() => { setTimerOn(false); setTimerMode('focus'); setSeconds(25 * 60) }}>Reset timer</button></div><div className="panel ambience"><div className="note-icon">♫</div><h2>Set the mood</h2><p>A little background can help quiet the noise.</p><div className="sound-options">{[['☂', 'Rain'], ['≋', 'White noise'], ['♫', 'Lo-fi beats']].map(([icon, name]) => <button type="button" key={name} className={soundName === name ? 'playing' : ''} aria-pressed={soundName === name} onClick={() => toggleAmbient(name).catch(() => setToast('Could not start audio in this browser.'))}><span>{icon}</span>{name}<small>{soundName === name ? '■ Stop' : '▶ Play'}</small></button>)}</div><p className="muted">{soundName ? `${soundName} is playing. Tap it again to stop.` : 'Choose a sound to play or tap it again to stop.'}</p></div></div>}
     {page === 'Grade tracker' && <div className="grade-grid"><div className="panel grade-card"><div className="eyebrow">GRADE CALCULATOR</div><h2>What are you aiming for?</h2><p>Add your current score and its weight to see a running estimate.</p><label>Current score (%)<input type="number" min="0" max="100" value={grade} onChange={(event) => setGrade(event.target.value)} placeholder="e.g. 86"/></label><label>Category weight (%)<input type="number" min="0" max="100" value={weight} onChange={(event) => setWeight(event.target.value)} placeholder="e.g. 30"/></label><div className="grade-result"><small>WEIGHTED SCORE</small><strong>{grade && weight ? `${(Number(grade) * Number(weight) / 100).toFixed(1)}%` : '—'}</strong><span>based on the score and weight above</span></div><small className="muted">This is a quick estimate. Add all course categories for a full projection.</small></div><div className="panel grades-note"><span className="tip-icon">✦</span><h2>Progress over perfection.</h2><p>A grade is a snapshot, not the whole story. Keep showing up and doing your best.</p><div className="grade-example"><span>Biology</span><div><i style={{ width: '78%' }} /></div><strong>78%</strong></div><div className="grade-example"><span>Calculus</span><div><i style={{ width: '84%' }} /></div><strong>84%</strong></div><div className="grade-example"><span>Literature</span><div><i style={{ width: '91%' }} /></div><strong>91%</strong></div></div></div>}
