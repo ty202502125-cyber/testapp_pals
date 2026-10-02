@@ -39,6 +39,14 @@ test('monthly recurrence, deleted dates, and occurrence overrides stay distinct'
   assert.equal(moved[0].title, 'Project review')
 })
 
+test('month scope ends at month end while year scope continues each month through December', () => {
+  const monthlyTask = task({ frequency: 'monthly', startDate: '2026-10-05', endDate: '2026-10-31', period: 'month' })
+  const thisMonth = expandTaskOccurrences([monthlyTask], ...range('2026-10-01', '2026-12-31'))
+  const thisYear = expandTaskOccurrences([{ ...monthlyTask, recurrence: { ...monthlyTask.recurrence, endDate: '2026-12-31', period: 'year' } }], ...range('2026-10-01', '2026-12-31'))
+  assert.deepEqual(thisMonth.map((item) => item.occurrenceDate), ['2026-10-05'])
+  assert.deepEqual(thisYear.map((item) => item.occurrenceDate), ['2026-10-05', '2026-11-05', '2026-12-05'])
+})
+
 test('completed dates are reflected on individual repeated occurrences', () => {
   const series = task({ frequency: 'daily', startDate: '2026-10-05', endDate: '2026-10-06' })
   series.completedOccurrences = ['2026-10-06']

@@ -46,6 +46,14 @@ button:disabled { cursor: not-allowed; opacity: .58; }
 .toast { max-width: calc(100vw - 32px); white-space: normal; text-align: center; }
 .alarm-toast { max-width: calc(100vw - 32px); }
 .month-day { overflow-wrap: anywhere; }
+.month-day { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.month-day-date { width: 100%; min-height: 28px; padding: 0 0 3px; border: 0; background: transparent; color: inherit; text-align: left; font-weight: 700; cursor: pointer; }
+.month-task-item { display: flex; align-items: center; min-width: 0; gap: 2px; margin-top: 3px; }
+.month-task-label { display: block; flex: 1; min-width: 0; overflow: hidden; margin: 0; border: 0; text-align: left; text-overflow: ellipsis; white-space: nowrap; padding: 2px 4px; border-radius: 4px; color: #5c4e9c; background: #f0edfb; font-size: 9px; cursor: pointer; }
+.month-task-delete { flex: 0 0 20px; width: 20px; min-height: 24px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: #a84343; font-size: 15px; cursor: pointer; }
+.month-task-delete:hover { background: #fae9e8; }
+.month-more { padding: 2px 1px; border: 0; background: transparent; color: var(--muted); text-align: left; font-size: 9px; cursor: pointer; }
+.month-class-count { margin-top: 3px; color: var(--muted); font-size: 9px; }
 .calendar-tools { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 14px; }
 .calendar-tools > .primary-button { min-height: 42px; white-space: nowrap; }
 .notification-control { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; color: var(--muted); font-size: 12px; text-align: right; }
@@ -86,9 +94,14 @@ button:disabled { cursor: not-allowed; opacity: .58; }
 .dark .calendar-event.task-event.completed { background: #293b33; border-color: #3d5547; color: #a7c9b1; }
 .dark .calendar-event.task-event.overdue { background: #432f31; border-color: #604143; color: #efb0a8; }
 .dark .month-task-label { background: #37314a; color: #d1c7fa !important; }
+.dark .month-task-delete:hover, .dark .task-editor-actions .delete-task-action:hover { background: #462f32; }
 .dark .day-task-row { border-color: var(--line); }
 .dark .delete-actions .secondary-action { background: #2a2933; color: var(--ink); border-color: var(--line); }
 .task-editor { width: min(520px, 100%); }
+.task-editor-actions { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+.task-editor-actions .modal-submit { flex: 1; width: auto; margin-top: 0; min-height: 44px; }
+.task-editor-actions .delete-task-action { min-height: 44px; padding: 8px 12px; border: 1px solid #ecd5d3; border-radius: 8px; background: transparent; color: #a84343; cursor: pointer; }
+.task-editor-actions .delete-task-action:hover { background: #fae9e8; }
 .task-editor > .task-field { display: block; margin-top: 13px; color: var(--ink); font-size: 12px; font-weight: 600; }
 .task-field input, .task-field textarea, .task-field select { display: block; width: 100%; min-height: 44px; margin-top: 5px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); font-size: 16px; }
 .task-field textarea { min-height: 72px; resize: vertical; }
@@ -242,7 +255,13 @@ button:disabled { cursor: not-allowed; opacity: .58; }
   .weekday-picker, .scope-picker { gap: 5px 10px; }
   .weekday-picker label, .scope-picker label { min-height: 42px; }
   .month-grid { gap: 3px; }
-  .month-day { min-height: 55px; padding: 5px 3px; }
+  .month-day { min-height: 82px; padding: 5px 3px; }
+  .month-day-date { min-height: 24px; font-size: 11px; }
+  .month-task-item { gap: 0; margin-top: 2px; }
+  .month-task-label { padding: 2px; font-size: 8px; }
+  .month-task-delete { display: none; }
+  .month-class-count { display: none; }
+  .month-more { max-width: 100%; font-size: 8px; }
   .month-weekday { font-size: 10px; }
   .modal-backdrop { place-items: center; padding: 12px; }
   .modal { width: min(440px, 100%); max-height: calc(100dvh - 24px); padding: 22px 18px; }

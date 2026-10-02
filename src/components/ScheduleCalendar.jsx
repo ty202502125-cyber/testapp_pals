@@ -68,11 +68,16 @@ export default function ScheduleCalendar({ date, view, onView, onMove, onDateSel
     {view === 'Month' ? <div className="panel month-panel"><div className="month-grid">
       {weekdays.map((day) => <strong className="month-weekday" key={day}>{day}</strong>)}
       {monthDays.map((day) => {
-        const count = monthDayTasks(day).length + monthClassCount(day)
-        const taskLabels = monthDayTasks(day).slice(0, 2).map((task) => task.title)
-        return <button type="button" key={day.toISOString()} className={`month-day${day.getMonth() !== date.getMonth() ? ' outside-month' : ''}${sameDay(day, new Date()) ? ' today' : ''}${monthDayTasks(day).length ? ' has-tasks' : ''}`} onClick={() => onDateSelect(day)} aria-label={`${new Intl.DateTimeFormat(undefined, { dateStyle: 'full' }).format(day)}, ${monthDayTasks(day).length} tasks and ${monthClassCount(day)} classes`}>
-          <span>{day.getDate()}</span>{taskLabels.map((title, index) => <small className="month-task-label" key={`${title}-${index}`}>{title}</small>)}{count > taskLabels.length && <small className="month-more">+{count - taskLabels.length} more</small>}
-        </button>
+        const tasksForDay = monthDayTasks(day)
+        const taskLabels = tasksForDay.slice(0, 2)
+        const hiddenTaskCount = tasksForDay.length - taskLabels.length
+        const classCount = monthClassCount(day)
+        const dateLabel = new Intl.DateTimeFormat(undefined, { dateStyle: 'full' }).format(day)
+        return <div key={day.toISOString()} className={`month-day${day.getMonth() !== date.getMonth() ? ' outside-month' : ''}${sameDay(day, new Date()) ? ' today' : ''}${tasksForDay.length ? ' has-tasks' : ''}`}>
+          <button type="button" className="month-day-date" onClick={() => onDateSelect(day)} aria-label={`Open ${dateLabel}: ${tasksForDay.length} tasks, ${classCount} classes`}>{day.getDate()}</button>
+          {taskLabels.map((task) => <div className="month-task-item" key={task.occurrenceId}><button type="button" className="month-task-label" title={`Edit ${task.title}`} onClick={() => onEditTask(task)}>{task.title}</button><button type="button" className="month-task-delete" aria-label={`Delete ${task.title}`} title={`Delete ${task.title}`} onClick={() => onDeleteTask(task)}>×</button></div>)}
+          {hiddenTaskCount > 0 ? <button type="button" className="month-more" aria-label={`Open ${dateLabel}, with ${hiddenTaskCount} more tasks`} onClick={() => onDateSelect(day)}>+{hiddenTaskCount} more</button> : classCount > 0 && <small className="month-class-count">{classCount} {classCount === 1 ? 'class' : 'classes'}</small>}
+        </div>
       })}
     </div></div> : <div className={`panel calendar-panel${view === 'Day' ? ' day-view' : ''}`}>
       <div className="calendar-head" style={{ gridTemplateColumns: `54px repeat(${visibleDays.length}, minmax(92px, 1fr))` }}>
