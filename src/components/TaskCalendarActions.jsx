@@ -1,4 +1,4 @@
-export default function TaskCalendarActions({ task, onClose, onEdit, onDelete }) {
+ export default function TaskCalendarActions({ task, onClose, onEdit, onDelete }) {
   if (!task) return null
   const scheduled = new Intl.DateTimeFormat(undefined, {
     weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit',
