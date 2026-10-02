@@ -8,7 +8,7 @@ import ScheduleCalendar from './components/ScheduleCalendar.jsx'
 import TaskEditor from './components/TaskEditor.jsx'
 import TaskDeleteDialog from './components/TaskDeleteDialog.jsx'
 import TaskList from './components/TaskList.jsx'
-import { deleteCalendarTask, expandTaskOccurrences, localDateKey, saveCalendarTask } from './services/calendarTasks.js'
+import { dateKeyFromDueAt, deleteCalendarTask, expandTaskOccurrences, localDateKey, localDateTime, saveCalendarTask } from './services/calendarTasks.js'
 import { connectGoogle, preloadGoogleIdentity, revokeGoogleToken, saveGoogleData } from './services/googleDrive.js'
 
 const nav = [ ['Overview','⌂'], ['My schedule','▦'], ['My tasks','☷'], ['Study materials','▧'], ['Flashcards','▤'], ['Study room','◷'], ['Grade tracker','◉'] ]
@@ -260,7 +260,7 @@ function App() {
           <footer className="page-footer">Made with care, for everything you’re becoming. <span>✳</span></footer>
         </div>
       </main>
-      {taskEditor && <TaskEditor key={`${taskEditor.mode}-${taskEditor.task?.id || 'new'}-${taskEditor.occurrenceDate || ''}`} initial={taskEditor} onClose={() => setTaskEditor(null)} onSave={saveTask} onDelete={(task) => { setTaskEditor(null); setDeleteTarget(task) }} />}
+      {taskEditor && <TaskEditor key={`${taskEditor.mode}-${taskEditor.task?.id || 'new'}-${taskEditor.occurrenceDate || ''}`} initial={taskEditor} onClose={() => setTaskEditor(null)} onSave={saveTask} />}
       {deleteTarget && <TaskDeleteDialog recurring={deleteTarget} onClose={() => setDeleteTarget(null)} onDelete={deleteTask} />}
       {installHint && <div className="modal-backdrop" onClick={() => setInstallHint(false)}><div className="modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}><button className="modal-close" aria-label="Close install instructions" onClick={() => setInstallHint(false)}>×</button><span className="modal-icon">↓</span><h2>Take Check with you</h2><p>Install this site for quick access from your home screen. In your browser menu, choose <strong>“Add to Home Screen”</strong> or <strong>“Install app.”</strong></p><button className="primary-button modal-submit" onClick={() => setInstallHint(false)}>Got it</button></div></div>}
       {accountDialog && <AccountDialog account={googleAccount} status={cloudStatus} configured={Boolean(googleClientId)} onConnect={signInWithGoogle} onDisconnect={signOutGoogle} onClose={() => setAccountDialog(false)} />}

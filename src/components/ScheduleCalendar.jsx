@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { expandTaskOccurrences, localDateKey } from '../services/calendarTasks.js'
+import TaskCalendarActions from './TaskCalendarActions.jsx'
 
 const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const weekIndex = (date) => (date.getDay() + 6) % 7
@@ -9,6 +10,7 @@ const timeLabel = (date) => new Intl.DateTimeFormat(undefined, { hour: 'numeric'
 
 export default function ScheduleCalendar({ date, view, onView, onMove, onDateSelect, subjects, tasks, onCreateTask, onEditTask, onDeleteTask, onToggleTask, remindersEnabled, reminderSoundEnabled, onReminderSoundSetting, notificationPermission, onNotificationSetting }) {
   const [now, setNow] = useState(0)
+  const [selectedTask, setSelectedTask] = useState(null)
   useEffect(() => {
     const update = () => setNow(Date.now())
     update()
@@ -44,7 +46,7 @@ export default function ScheduleCalendar({ date, view, onView, onMove, onDateSel
   const renderTask = (task) => {
     const dueDate = new Date(task.dueAt)
     const overdue = !task.done && now > 0 && dueDate.getTime() < now
-    return <button type="button" key={task.occurrenceId} className={`calendar-event task-event${task.done ? ' completed' : ''}${overdue ? ' overdue' : ''}${isRecurring(task) ? ' recurring' : ''}`} onClick={() => onEditTask(task)} aria-label={`Edit ${task.title}, ${timeLabel(dueDate)}${task.done ? ', completed' : ''}`} title={`${task.title} · ${timeLabel(dueDate)}${task.reminderMinutes == null ? '' : ' · reminder set'}${isRecurring(task) ? ' · recurring' : ''}`}>
+    return <button type="button" key={task.occurrenceId} className={`calendar-event task-event${task.done ? ' completed' : ''}${overdue ? ' overdue' : ''}${isRecurring(task) ? ' recurring' : ''}`} onClick={() => setSelectedTask(task)} aria-label={`Task actions for ${task.title}, ${timeLabel(dueDate)}${task.done ? ', completed' : ''}`} title={`${task.title} · ${timeLabel(dueDate)}${task.reminderMinutes == null ? '' : ' · reminder set'}${isRecurring(task) ? ' · recurring' : ''}`}>
       <strong>{task.title}</strong><small>{timeLabel(dueDate)}{task.reminderMinutes != null ? ' · ◷' : ''}{isRecurring(task) ? ' · ↻' : ''}</small>
     </button>
   }
@@ -75,7 +77,7 @@ export default function ScheduleCalendar({ date, view, onView, onMove, onDateSel
         const dateLabel = new Intl.DateTimeFormat(undefined, { dateStyle: 'full' }).format(day)
         return <div key={day.toISOString()} className={`month-day${day.getMonth() !== date.getMonth() ? ' outside-month' : ''}${sameDay(day, new Date()) ? ' today' : ''}${tasksForDay.length ? ' has-tasks' : ''}`}>
           <button type="button" className="month-day-date" onClick={() => onDateSelect(day)} aria-label={`Open ${dateLabel}: ${tasksForDay.length} tasks, ${classCount} classes`}>{day.getDate()}</button>
-          {taskLabels.map((task) => <div className="month-task-item" key={task.occurrenceId}><button type="button" className="month-task-label" title={`Edit ${task.title}`} onClick={() => onEditTask(task)}>{task.title}</button><button type="button" className="month-task-delete" aria-label={`Delete ${task.title}`} title={`Delete ${task.title}`} onClick={() => onDeleteTask(task)}>×</button></div>)}
+          {taskLabels.map((task) => <div className="month-task-item" key={task.occurrenceId}><button type="button" className="month-task-label" title={`Task actions for ${task.title}`} onClick={() => setSelectedTask(task)}>{task.title}</button></div>)}
           {hiddenTaskCount > 0 ? <button type="button" className="month-more" aria-label={`Open ${dateLabel}, with ${hiddenTaskCount} more tasks`} onClick={() => onDateSelect(day)}>+{hiddenTaskCount} more</button> : classCount > 0 && <small className="month-class-count">{classCount} {classCount === 1 ? 'class' : 'classes'}</small>}
         </div>
       })}
@@ -98,8 +100,9 @@ export default function ScheduleCalendar({ date, view, onView, onMove, onDateSel
       </div>
     </div>}
     {view === 'Day' && <section className="panel day-task-list"><div className="panel-heading"><div><h2>Tasks for this day</h2><p>{dayTasks.length ? `${dayTasks.length} scheduled` : 'Nothing planned yet.'}</p></div></div>
-      {dayTasks.map((task) => <article className={`day-task-row${task.done ? ' completed' : ''}`} key={task.occurrenceId}><div className="day-task-time">{timeLabel(new Date(task.dueAt))}</div><div className="day-task-copy"><strong>{task.title}</strong>{task.description && <p>{task.description}</p>}<small>{task.reminderMinutes == null ? 'No reminder' : task.reminderMinutes === 0 ? 'Reminder at task time' : `Reminder ${task.reminderMinutes} minutes before`}{isRecurring(task) ? ' · Repeats' : ''}{task.done ? ' · Completed' : ''}</small></div><div className="day-task-actions"><button type="button" onClick={() => onToggleTask(task)}>{task.done ? 'Undo' : 'Complete'}</button><button type="button" onClick={() => onEditTask(task)}>Edit</button><button type="button" className="delete-task-action" onClick={() => onDeleteTask(task)}>Delete</button></div></article>)}
+      {dayTasks.map((task) => <article className={`day-task-row${task.done ? ' completed' : ''}`} key={task.occurrenceId}><div className="day-task-time">{timeLabel(new Date(task.dueAt))}</div><div className="day-task-copy"><strong>{task.title}</strong>{task.description && <p>{task.description}</p>}<small>{task.reminderMinutes == null ? 'No reminder' : task.reminderMinutes === 0 ? 'Reminder at task time' : `Reminder ${task.reminderMinutes} minutes before`}{isRecurring(task) ? ' · Repeats' : ''}{task.done ? ' · Completed' : ''}</small></div><div className="day-task-actions"><button type="button" onClick={() => onToggleTask(task)}>{task.done ? 'Undo' : 'Complete'}</button><button type="button" onClick={() => setSelectedTask(task)}>Edit or delete</button></div></article>)}
       {!dayTasks.length && <button type="button" className="add-row" onClick={() => onCreateTask(localDateKey(date))}>＋ <span>Add a task to this day</span></button>}
     </section>}
+    {selectedTask && <TaskCalendarActions task={selectedTask} onClose={() => setSelectedTask(null)} onEdit={(task) => { setSelectedTask(null); onEditTask(task) }} onDelete={(task) => { setSelectedTask(null); onDeleteTask(task) }} />}
   </>
 }
