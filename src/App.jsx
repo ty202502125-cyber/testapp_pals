@@ -146,6 +146,7 @@ function App() {
   const [seconds, setSeconds] = useState(activePreset.focus)
   const [timerMode, setTimerMode] = useState('focus')
   const [timerOn, setTimerOn] = useState(false)
+  const [sessionGlow, setSessionGlow] = useState(false)
 
   const [dark, setDark] = useState(() => read('check-dark', false))
   const [alarm, setAlarm] = useState(false)
@@ -250,6 +251,7 @@ function App() {
       setSeconds((value) => {
         if (value <= 1) {
           setTimerOn(false)
+          setSessionGlow(true)
           playSoftChime(587.33, 0.45)
           if (timerMode === 'focus') {
             setFocusStats((prev) => ({
@@ -276,6 +278,13 @@ function App() {
     const id = setTimeout(() => setToast(''), 3200)
     return () => clearTimeout(id)
   }, [toast])
+
+  // Session-complete lime glow on the timer ring: on for ~2.6s, then off.
+  useEffect(() => {
+    if (!sessionGlow) return undefined
+    const id = setTimeout(() => setSessionGlow(false), 2600)
+    return () => clearTimeout(id)
+  }, [sessionGlow])
 
   useEffect(() => {
     if (!alarm || !reminderSoundEnabled) return undefined
@@ -883,7 +892,7 @@ function App() {
 
                   <div className="timer-wrap">
                     <div
-                      className={`timer-ring${timerOn ? ' running' : ''}`}
+                      className={`timer-ring${timerOn ? ' running' : ''}${sessionGlow ? ' session-complete' : ''}`}
                       style={{ '--progress': `${progressDeg}deg` }}
                     >
                       <div className="timer-inner">
@@ -964,6 +973,7 @@ function App() {
               setTimerMode={setTimerMode}
               timerOn={timerOn}
               setTimerOn={setTimerOn}
+              sessionGlow={sessionGlow}
               timeLabel={timeLabel}
               focusStats={focusStats}
               focusMinutesToday={focusMinutesToday}
@@ -1073,6 +1083,39 @@ function App() {
 }
 
 
+/* AnimatedNumber — counts a number up/down to its new value with
+   requestAnimationFrame (no library). Jumps straight to the value under
+   prefers-reduced-motion. Used for the Grades weighted average. */
+function AnimatedNumber({ value, format }) {
+  const [display, setDisplay] = useState(value)
+  const prevRef = useRef(value)
+  useEffect(() => {
+    const from = prevRef.current ?? 0
+    const to = value ?? 0
+    prevRef.current = value
+    if (from === to) {
+      setDisplay(to)
+      return undefined
+    }
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setDisplay(to)
+      return undefined
+    }
+    let raf = 0
+    const start = performance.now()
+    const tick = (now) => {
+      const p = Math.min(1, (now - start) / 500)
+      const eased = 1 - Math.pow(1 - p, 3)
+      setDisplay(from + (to - from) * eased)
+      if (p < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [value])
+  if (value == null || display == null) return <>—</>
+  return <>{format(display)}</>
+}
+
 function SectionPage({
   page,
   tasks,
@@ -1098,6 +1141,7 @@ function SectionPage({
   setTimerMode,
   timerOn,
   setTimerOn,
+  sessionGlow,
   timeLabel,
   focusStats,
   focusMinutesToday,
@@ -1224,7 +1268,7 @@ function SectionPage({
               ))}
             </div>
 
-            <div className={`timer-ring room-ring${timerOn ? ' running' : ''}`} style={{ '--progress': `${progressDeg}deg` }}>
+            <div className={`timer-ring room-ring${timerOn ? ' running' : ''}${sessionGlow ? ' session-complete' : ''}`} style={{ '--progress': `${progressDeg}deg` }}>
               <div className="timer-inner">
                 <span>{timeLabel}</span>
                 <small>
@@ -1494,7 +1538,7 @@ function SectionPage({
               <small>
                 WEIGHT ACCOUNTED: {gradeStats.totalWeight.toFixed(0)}%
               </small>
-              <strong>{gradeStats.currentAvg != null ? `${gradeStats.currentAvg.toFixed(1)}%` : '—'}</strong>
+              <strong className="grade-avg"><AnimatedNumber value={gradeStats.currentAvg} format={(v) => `${v.toFixed(1)}%`} /></strong>
               <span>
                 {gradeStats.totalWeight > 0
                   ? `${gradeStats.earnedWeighted.toFixed(1)} weighted points earned so far`
