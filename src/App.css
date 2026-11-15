@@ -2,7 +2,7 @@
    MIDNIGHT FOCUS — Check theme (UI-only port of the "Marginalia" theme)
    Dark-first student desk: deep navy canvas, lime focus accent (#b8f53d),
    soft rounded cards, gentle glow instead of hard offset shadows.
-   Same class names and selectors as the original — App.jsx is unchanged.
+   Restructured for the 5-page layout (Today, Tasks, Study, Materials, Grades).
    Interactive animations live in the section at the end of this file.
    ========================================================================== */
 
@@ -69,10 +69,6 @@
   0% { transform: translate(-50%, -50%) scale(0.8); }
   60% { transform: translate(-50%, -50%) scale(1.16); }
   100% { transform: translate(-50%, -50%) scale(1); }
-}
-@keyframes eqBounce {
-  0%, 100% { transform: scaleY(0.35); }
-  50% { transform: scaleY(1); }
 }
 @keyframes ringpulse {
   50% { filter: brightness(1.14); }
@@ -146,19 +142,8 @@
 .selected .nav-count { background: #0b1000; color: #b8f53d; }
 .sidebar-bottom { margin-top: auto; padding-top: 16px; display: grid; gap: 6px; }
 .theme-toggle { min-height: 44px; }
-.streak-card { padding: 14px; margin-bottom: 6px; background: var(--mark-soft); border: 1px dashed var(--line); border-radius: var(--r-m); }
-.streak-top { display: flex; align-items: center; color: var(--ink); font-size: 15px; }
-.streak-days { margin: 0 auto 0 6px; font-weight: 700; font-size: 13px; }
-.streak-mins { font-size: 12px; font-weight: 800; padding: 1px 7px; border-radius: 99px; background: var(--mark); color: var(--on-mark); border: 1px solid transparent; }
-.streak-card strong, .streak-card small { display: block; }
-.streak-card strong { font-size: 13px; margin-top: 8px; }
-.streak-card small { font-size: 12px; color: var(--muted); }
-.streak-bars { display: flex; gap: 5px; margin-top: 10px; }
-.streak-bars i { flex: 1; height: 7px; border-radius: 4px; background: var(--line); transition: background-color .3s var(--ease-spring); }
-.streak-bars i.active { background: var(--cobalt); }
 .sidebar-foot { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 10px 6px 0; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
 .kbd-hint { display: inline-block; padding: 0 5px; font: 700 11px var(--f-body); color: var(--ink); background: var(--canvas); border: 1px solid var(--line); border-radius: 5px; }
-.install-arrow { margin-left: auto; }
 
 /* ---------- Top bar & page ---------- */
 .main-area { flex: 1; min-width: 0; }
@@ -170,32 +155,14 @@
   border-bottom: 1px solid var(--line);
   position: sticky; top: 0; z-index: 5;
 }
-.breadcrumbs { font-size: 14px; color: var(--muted); }
-.breadcrumbs span { padding: 0 8px; opacity: .6; }
-.breadcrumbs strong { color: var(--ink); font-weight: 700; }
 .top-actions { display: flex; align-items: center; gap: 10px; }
-.quick-add-pill {
-  height: 40px; display: inline-flex; align-items: center; gap: 6px;
-  padding: 0 14px; font-size: 13px; font-weight: 700; color: var(--ink);
-  background: var(--paper); border: 1.5px solid var(--line); border-radius: 99px; cursor: pointer;
-  transition: border-color .16s, background-color .16s, transform .16s var(--ease-spring);
-}
-.quick-add-pill:hover { border-color: var(--edge); background: var(--mark); color: var(--on-mark); transform: translateY(-1px); }
-.icon-button, .calendar-button {
+.icon-button {
   width: 40px; height: 40px; display: inline-grid; place-items: center;
   font-size: 17px; color: var(--ink-2);
   background: var(--paper); border: 1.5px solid var(--line); border-radius: 12px; cursor: pointer;
   transition: border-color .15s, background-color .15s, transform .15s;
 }
-.icon-button:hover, .calendar-button:hover { border-color: var(--edge); background: var(--cobalt-soft); transform: translateY(-1px); }
-.today-pill {
-  height: 40px; display: inline-flex; align-items: center;
-  padding: 0 14px; font-size: 14px; color: var(--muted);
-  background: var(--paper); border: 1.5px solid var(--line); border-radius: 99px;
-}
-.today-pill span { padding-left: 6px; color: var(--ink); font-weight: 700; }
-.small-avatar { width: 40px; height: 40px; border: 1.5px solid var(--edge); cursor: pointer; transition: transform .16s var(--ease-spring); }
-.small-avatar:hover { transform: scale(1.06); }
+.icon-button:hover { border-color: var(--edge); background: var(--cobalt-soft); transform: translateY(-1px); }
 
 .page-content { max-width: 1240px; margin: 0 auto; padding: 36px clamp(20px, 4vw, 56px) 40px; }
 .greeting-row, .section-title { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 28px; }
@@ -322,7 +289,6 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .green-tag { background: var(--mint-soft); color: var(--mint); }
 .purple-tag { background: var(--cobalt-soft); color: var(--cobalt); }
 .orange-tag { background: var(--amber-soft); color: var(--amber); }
-.schedule-link { display: flex; justify-content: space-between; width: 100%; min-height: 44px; align-items: center; margin-top: 6px; padding: 0; font-size: 14px; font-weight: 700; color: var(--cobalt); background: transparent; border: 0; border-top: 1px solid var(--line-2); cursor: pointer; }
 
 /* ---------- Focus timer & sticky note ---------- */
 .focus-panel { position: relative; overflow: hidden; display: flex; align-items: center; gap: 12px; min-height: 230px; padding: 26px; color: #fff; background: linear-gradient(135deg, #141b40, #0a0f2e); border-color: var(--line); box-shadow: 0 16px 40px rgba(2, 6, 23, .55), 0 0 32px rgba(184, 245, 61, .12); }
@@ -359,7 +325,7 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .note-icon { width: 34px; height: 34px; display: grid; place-items: center; font-size: 16px; color: var(--cobalt); background: var(--cobalt-soft); border-radius: 10px; }
 .note-panel .note-icon { background: rgba(184, 245, 61, .12); color: var(--sticky-ink); }
 .note-date { margin-left: auto; font-size: 12px; font-weight: 700; }
-.note-panel textarea, .quick-note textarea {
+.note-panel textarea {
   display: block; width: 100%; height: 100px; padding: 12px 2px 6px; resize: none;
   font-size: 15px; line-height: 1.7; color: inherit; background: transparent; border: 0; outline: none;
 }
@@ -411,10 +377,11 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .calendar-tools { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 
 /* ---------- Flashcards Studio, Study Room, Grades, Materials ---------- */
-.flash-layout, .study-room-grid, .grade-grid, .materials-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.flash-summary, .study-tip, .room-timer, .ambience, .grade-card, .grades-note, .upload-panel, .ai-panel, .quick-note { padding: 26px; }
-.flash-summary h2, .study-tip h2, .ambience h2, .grade-card h2, .grades-note h2, .upload-panel h2, .ai-panel h2 { margin: 12px 0 8px; font-size: 24px; line-height: 1.2; letter-spacing: -.5px; }
-.flash-summary > p, .study-tip > p, .ambience > p, .grade-card > p, .grades-note > p, .upload-panel > p, .ai-panel > p { max-width: 46ch; font-size: 15px; line-height: 1.65; color: var(--muted); }
+.flash-layout, .study-room-grid, .grade-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.materials-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+.flash-summary, .study-tip, .room-timer, .grade-card, .grades-note, .upload-panel { padding: 26px; }
+.flash-summary h2, .study-tip h2, .grade-card h2, .grades-note h2, .upload-panel h2 { margin: 12px 0 8px; font-size: 24px; line-height: 1.2; letter-spacing: -.5px; }
+.flash-summary > p, .study-tip > p, .grade-card > p, .grades-note > p, .upload-panel > p { max-width: 46ch; font-size: 15px; line-height: 1.65; color: var(--muted); }
 .flash-summary .primary-button { margin: 16px 0 20px; }
 
 .deck-list { max-height: 300px; overflow-y: auto; }
@@ -429,7 +396,7 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 }
 .icon-delete:hover { color: var(--coral); background: var(--coral-soft); border-color: var(--coral); }
 
-.study-tip, .grades-note, .ai-panel { background: var(--mark-soft); border-color: var(--edge); border-style: dashed; }
+.study-tip, .grades-note { background: var(--mark-soft); border-color: var(--edge); border-style: dashed; }
 .tip-icon { font-size: 26px; color: var(--cobalt); }
 .card-creator label, .grade-form label, .target-label { display: block; margin-top: 14px; font-size: 13px; font-weight: 700; color: var(--ink-2); }
 .card-creator input, .card-creator textarea, .grade-form input, .target-label input {
@@ -442,7 +409,7 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 }
 .card-creator .primary-button, .grade-form .primary-button { margin-top: 16px; width: 100%; }
 
-/* Study room presets & equalizer */
+/* Study room presets */
 .preset-pills { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-bottom: 18px; }
 .preset-pills button {
   padding: 6px 12px; font-size: 12px; font-weight: 700; color: var(--muted);
@@ -462,23 +429,6 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .room-timer .focus-button { margin-top: 6px; color: var(--on-cobalt); background: var(--cobalt); }
 .reset-timer { display: block; min-height: 40px; margin: 8px auto 0; font-size: 14px; font-weight: 600; color: var(--muted); background: none; border: 0; cursor: pointer; text-decoration: underline; }
 
-.sound-options { display: grid; gap: 8px; margin: 18px 0; }
-.sound-options button {
-  display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 10px 14px; text-align: left;
-  font-size: 15px; font-weight: 600; color: var(--ink); background: var(--paper); border: 1.5px solid var(--line); border-radius: 12px; cursor: pointer;
-  transition: border-color .16s, background-color .16s, transform .14s;
-}
-.sound-options button:hover { border-color: var(--cobalt); transform: translateX(2px); }
-.sound-options button > span:first-child { font-size: 18px; color: var(--cobalt); }
-.sound-options button small { margin-left: auto; font-size: 13px; color: var(--muted); }
-.sound-options button.playing { background: var(--cobalt-soft); border-color: var(--cobalt); color: var(--cobalt); }
-.sound-options button.playing small { font-weight: 800; color: var(--cobalt); }
-
-.eq-bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; margin-left: 4px; }
-.eq-bars i { display: block; width: 3px; height: 100%; border-radius: 2px; background: var(--cobalt); transform-origin: bottom; animation: eqBounce .7s ease-in-out infinite; }
-.eq-bars i:nth-child(2) { animation-delay: .18s; }
-.eq-bars i:nth-child(3) { animation-delay: .34s; }
-
 /* Grade tracker */
 .grade-input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .grade-list { margin-top: 18px; }
@@ -496,15 +446,13 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .target-callout { margin-top: 14px; padding: 12px 14px; font-size: 14px; line-height: 1.5; background: var(--paper); border: 1.5px solid var(--line); border-radius: 12px; }
 .target-callout p { margin: 0; }
 
-.upload-panel, .ai-panel, .quick-note { min-height: 220px; }
+.upload-panel { min-height: 220px; }
 .upload-zone { display: flex; flex-direction: column; align-items: center; gap: 6px; margin-top: 16px; padding: 24px 12px; text-align: center; background: var(--cobalt-soft); border: 2px dashed var(--cobalt); border-radius: var(--r-m); cursor: pointer; transition: background-color .18s; }
 .upload-zone:hover { background: var(--mark-soft); }
 .upload-zone input { display: none; }
 .upload-zone > span { width: 38px; height: 38px; display: grid; place-items: center; font-size: 20px; color: var(--on-cobalt); background: var(--cobalt); border-radius: 50%; }
 .upload-zone strong { font-size: 15px; }
 .upload-zone small { font-size: 13px; color: var(--muted); }
-.ai-panel .primary-button { margin-top: 14px; }
-.quick-note textarea { height: 120px; border-bottom: 1.5px dashed var(--line); }
 
 /* ---------- Dialogs, 3D Flashcard & Toasts ---------- */
 .modal-backdrop { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; overflow-y: auto; padding: max(14px, env(safe-area-inset-top)) 16px max(14px, env(safe-area-inset-bottom)); background: #05070fb8; backdrop-filter: blur(4px); }
@@ -588,6 +536,40 @@ button:disabled { opacity: .55; cursor: not-allowed; }
   }
 }
 
+
+/* ---------- New top bar, week strip, filters & study layout ---------- */
+.topbar-title { font: 700 18px var(--f-display); letter-spacing: -.4px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar-btn { height: 40px; display: inline-flex; align-items: center; gap: 6px; padding: 0 14px; font-size: 13px; font-weight: 700; color: var(--ink); background: var(--paper); border: 1.5px solid var(--line); border-radius: 99px; cursor: pointer; transition: border-color .16s, background-color .16s, transform .16s var(--ease-spring); }
+.topbar-btn:hover { border-color: var(--cobalt); transform: translateY(-1px); }
+.topbar-btn input[type="file"] { display: none; }
+
+.week-strip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; margin-top: 16px; }
+.week-day { display: grid; gap: 2px; padding: 10px 6px; text-align: center; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; color: var(--ink); cursor: pointer; transition: transform .16s var(--ease-spring), border-color .16s; }
+.week-day:hover { transform: translateY(-2px); border-color: var(--cobalt); }
+.week-day small { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; }
+.week-day strong { font: 800 20px var(--f-display); }
+.week-day span { font-size: 12px; color: var(--muted); }
+.week-day.today { border-color: var(--cobalt); box-shadow: var(--glow); }
+.week-day.today small, .week-day.today span { color: var(--cobalt); }
+
+.filter-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.filter-pills button { min-height: 40px; padding: 6px 14px; font-size: 14px; font-weight: 600; color: var(--muted); background: transparent; border: 1.5px solid var(--line); border-radius: 99px; cursor: pointer; transition: all .16s var(--ease-spring); }
+.filter-pills button:hover { color: var(--ink); border-color: var(--cobalt); }
+.filter-pills button.active { color: var(--on-mark); background: var(--mark); border-color: transparent; box-shadow: var(--glow); }
+.filter-count { margin-left: 4px; padding: 1px 7px; font-size: 12px; font-weight: 700; color: var(--on-cobalt); background: var(--cobalt); border-radius: 99px; }
+.filter-pills button.active .filter-count { background: var(--on-mark); color: var(--mark); }
+
+.study-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.study-stats { padding: 26px; }
+.study-stats h2 { margin: 12px 0 8px; font-size: 24px; }
+.study-stats > p { font-size: 15px; color: var(--muted); }
+.study-stats .study-big { font: 800 40px/1.1 var(--f-display); letter-spacing: -1px; margin-top: 6px; }
+.study-stats .study-big span { font: 500 14px var(--f-body); color: var(--muted); letter-spacing: 0; }
+.focus-progress { height: 8px; margin-top: 14px; overflow: hidden; background: var(--line); border-radius: 5px; }
+.focus-progress i { display: block; height: 100%; background: var(--cobalt); border-radius: 5px; transition: width .3s var(--ease-spring); }
+
+.calendar-section { margin-top: 16px; }
+
 /* ==========================================================================
    MIDNIGHT FOCUS — interactive animations (CSS only, no new packages)
    Hover lifts, staggered entrances, press feedback, glowing timer ring,
@@ -602,14 +584,13 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 
 /* Hover lifts: cards, buttons, nav */
 .summary-card:hover { transform: translateY(-4px); border-color: rgba(184, 245, 61, .45); box-shadow: 0 16px 34px rgba(2, 6, 23, .55), 0 0 24px rgba(184, 245, 61, .14); }
-.grade-card:hover, .flash-summary:hover, .room-timer:hover, .ambience:hover, .upload-panel:hover, .ai-panel:hover, .quick-note:hover { transform: translateY(-3px); box-shadow: 0 14px 30px rgba(2, 6, 23, .5); }
-.icon-button:hover, .calendar-button:hover, .quick-add-pill:hover { transform: translateY(-2px); border-color: rgba(184, 245, 61, .5); }
-.sound-options button:hover { transform: translateX(2px); border-color: rgba(184, 245, 61, .5); }
+.grade-card:hover, .flash-summary:hover, .room-timer:hover, .upload-panel:hover { transform: translateY(-3px); box-shadow: 0 14px 30px rgba(2, 6, 23, .5); }
+.icon-button:hover { transform: translateY(-2px); border-color: rgba(184, 245, 61, .5); }
 .deck-line:hover { background: rgba(184, 245, 61, .05); }
 
 /* Press feedback */
 .primary-button:active:not(:disabled), .focus-button:active:not(:disabled) { transform: translate(0, 1px) scale(.97); }
-.nav-item:active, .icon-button:active, .quick-add-pill:active { transform: scale(.96); }
+.nav-item:active, .icon-button:active { transform: scale(.96); }
 .rating-row button:active { transform: scale(.95); }
 
 /* Focus-timer ring: soft lime glow, gently pulsing while running */
@@ -636,5 +617,5 @@ button:disabled { opacity: .55; cursor: not-allowed; }
    kills all animations/transitions here too — this is belt and braces). */
 @media (prefers-reduced-motion: reduce) {
   .summary-card, .timer-ring.running, .flashcard-inner { animation: none !important; }
-  .summary-card:hover, .grade-card:hover, .flash-summary:hover, .room-timer:hover, .ambience:hover, .upload-panel:hover, .ai-panel:hover, .quick-note:hover, .icon-button:hover, .calendar-button:hover, .quick-add-pill:hover { transform: none !important; box-shadow: none !important; }
+  .summary-card:hover, .grade-card:hover, .flash-summary:hover, .room-timer:hover, .upload-panel:hover, .icon-button:hover { transform: none !important; box-shadow: none !important; }
 }

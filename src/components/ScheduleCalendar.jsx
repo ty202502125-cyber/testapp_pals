@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { expandTaskOccurrences, localDateKey } from '../services/calendarTasks.js'
 import TaskCalendarActions from './TaskCalendarActions.jsx'
 
-const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const weekIndex = (date) => (date.getDay() + 6) % 7
 const sameDay = (a, b) => a.toDateString() === b.toDateString()
 const slots = Array.from({ length: 24 }, (_, hour) => `${String(hour).padStart(2, '0')}:00`)
@@ -17,14 +16,6 @@ export default function ScheduleCalendar({ date, view, onView, onMove, onDateSel
     const id = window.setInterval(update, 60000)
     return () => window.clearInterval(id)
   }, [])
-  const monthStart = new Date(date.getFullYear(), date.getMonth(), 1)
-  const monthGridStart = new Date(monthStart)
-  monthGridStart.setDate(monthStart.getDate() - weekIndex(monthStart))
-  const monthDays = Array.from({ length: 42 }, (_, index) => {
-    const day = new Date(monthGridStart)
-    day.setDate(monthGridStart.getDate() + index)
-    return day
-  })
   const monday = new Date(date)
   monday.setDate(date.getDate() - weekIndex(date))
   const weekDays = Array.from({ length: 7 }, (_, index) => {
@@ -33,14 +24,12 @@ export default function ScheduleCalendar({ date, view, onView, onMove, onDateSel
     return day
   })
   const visibleDays = view === 'Day' ? [date] : weekDays
-  const rangeStart = view === 'Month' ? monthGridStart : view === 'Day' ? date : weekDays[0]
-  const rangeEnd = view === 'Month' ? new Date(monthGridStart.getFullYear(), monthGridStart.getMonth(), monthGridStart.getDate() + 41) : view === 'Day' ? date : weekDays[6]
+  const rangeStart = view === 'Day' ? date : weekDays[0]
+  const rangeEnd = view === 'Day' ? date : weekDays[6]
   const taskOccurrences = expandTaskOccurrences(tasks, rangeStart, rangeEnd)
   const label = view === 'Day'
     ? new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' }).format(date)
-    : view === 'Month'
-      ? new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(date)
-      : `${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(weekDays[0])} – ${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(weekDays[6])}`
+    : `${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(weekDays[0])} – ${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(weekDays[6])}`
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
   const isRecurring = (task) => Boolean(task.recurrence?.frequency && task.recurrence.frequency !== 'none')
   const renderTask = (task) => {
@@ -50,8 +39,6 @@ export default function ScheduleCalendar({ date, view, onView, onMove, onDateSel
       <strong>{task.title}</strong><small>{timeLabel(dueDate)}{task.reminderMinutes != null ? ' · ◷' : ''}{isRecurring(task) ? ' · ↻' : ''}</small>
     </button>
   }
-  const monthDayTasks = (day) => taskOccurrences.filter((task) => localDateKey(new Date(task.dueAt)) === localDateKey(day))
-  const monthClassCount = (day) => subjects.filter((item) => item.day === weekIndex(day)).length
   const dayTasks = taskOccurrences.filter((task) => localDateKey(new Date(task.dueAt)) === localDateKey(date)).sort((a, b) => new Date(a.dueAt) - new Date(b.dueAt))
 
   return <>
@@ -62,26 +49,12 @@ export default function ScheduleCalendar({ date, view, onView, onMove, onDateSel
     {notificationPermission === 'denied' && <p className="notification-help" role="status">Allow notifications for this site in your browser settings, then return here to use reminders.</p>}
     <p className="notification-limit">Reminders are checked while Check is open. Closed-app delivery requires server-backed Web Push.</p>
     <div className="view-switch" aria-label="Calendar view">
-      {['Day', 'Week', 'Month'].map((item) => <button type="button" key={item} className={view === item ? 'active' : ''} aria-pressed={view === item} onClick={() => onView(item)}>{item}</button>)}
+      {['Day', 'Week'].map((item) => <button type="button" key={item} className={view === item ? 'active' : ''} aria-pressed={view === item} onClick={() => onView(item)}>{item}</button>)}
       <span>{label}</span>
       <button type="button" aria-label={`Previous ${view.toLowerCase()}`} onClick={() => onMove(-1)}>‹</button>
       <button type="button" aria-label={`Next ${view.toLowerCase()}`} onClick={() => onMove(1)}>›</button>
     </div>
-    {view === 'Month' ? <div className="panel month-panel"><div className="month-grid">
-      {weekdays.map((day) => <strong className="month-weekday" key={day}>{day}</strong>)}
-      {monthDays.map((day) => {
-        const tasksForDay = monthDayTasks(day)
-        const taskLabels = tasksForDay.slice(0, 2)
-        const hiddenTaskCount = tasksForDay.length - taskLabels.length
-        const classCount = monthClassCount(day)
-        const dateLabel = new Intl.DateTimeFormat(undefined, { dateStyle: 'full' }).format(day)
-        return <div key={day.toISOString()} className={`month-day${day.getMonth() !== date.getMonth() ? ' outside-month' : ''}${sameDay(day, new Date()) ? ' today' : ''}${tasksForDay.length ? ' has-tasks' : ''}`}>
-          <button type="button" className="month-day-date" onClick={() => onDateSelect(day)} aria-label={`Open ${dateLabel}: ${tasksForDay.length} tasks, ${classCount} classes`}>{day.getDate()}</button>
-          {taskLabels.map((task) => <div className="month-task-item" key={task.occurrenceId}><button type="button" className="month-task-label" title={`Task actions for ${task.title}`} onClick={() => setSelectedTask(task)}>{task.title}</button></div>)}
-          {hiddenTaskCount > 0 ? <button type="button" className="month-more" aria-label={`Open ${dateLabel}, with ${hiddenTaskCount} more tasks`} onClick={() => onDateSelect(day)}>+{hiddenTaskCount} more</button> : classCount > 0 && <small className="month-class-count">{classCount} {classCount === 1 ? 'class' : 'classes'}</small>}
-        </div>
-      })}
-    </div></div> : <div className={`panel calendar-panel${view === 'Day' ? ' day-view' : ''}`}>
+    <div className={`panel calendar-panel${view === 'Day' ? ' day-view' : ''}`}>
       <div className="calendar-head" style={{ gridTemplateColumns: `54px repeat(${visibleDays.length}, minmax(92px, 1fr))` }}>
         <span>{timezone}</span>{visibleDays.map((day) => <strong className={sameDay(day, new Date()) ? 'today-column' : ''} key={day.toISOString()}>{new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(day)} <b>{day.getDate()}</b></strong>)}
       </div>
@@ -98,7 +71,7 @@ export default function ScheduleCalendar({ date, view, onView, onMove, onDateSel
           })}
         </div></div>)}
       </div>
-    </div>}
+    </div>
     {view === 'Day' && <section className="panel day-task-list"><div className="panel-heading"><div><h2>Tasks for this day</h2><p>{dayTasks.length ? `${dayTasks.length} scheduled` : 'Nothing planned yet.'}</p></div></div>
       {dayTasks.map((task) => <article className={`day-task-row${task.done ? ' completed' : ''}`} key={task.occurrenceId}><div className="day-task-time">{timeLabel(new Date(task.dueAt))}</div><div className="day-task-copy"><strong>{task.title}</strong>{task.description && <p>{task.description}</p>}<small>{task.reminderMinutes == null ? 'No reminder' : task.reminderMinutes === 0 ? 'Reminder at task time' : `Reminder ${task.reminderMinutes} minutes before`}{isRecurring(task) ? ' · Repeats' : ''}{task.done ? ' · Completed' : ''}</small></div><div className="day-task-actions"><button type="button" onClick={() => onToggleTask(task)}>{task.done ? 'Undo' : 'Complete'}</button><button type="button" onClick={() => setSelectedTask(task)}>Edit or delete</button></div></article>)}
       {!dayTasks.length && <button type="button" className="add-row" onClick={() => onCreateTask(localDateKey(date))}>＋ <span>Add a task to this day</span></button>}
