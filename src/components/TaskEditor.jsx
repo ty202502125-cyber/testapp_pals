@@ -36,22 +36,45 @@ export default function TaskEditor({ initial, onClose, onSave, onDelete }) {
     <h2>{initial.mode === 'edit' ? 'Edit task' : 'Add a calendar task'}</h2>
     <p>Choose when it happens and when Check should remind you.</p>
     <label className="task-field">Task title<input autoFocus required maxLength={180} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="What needs to get done?" /></label>
-    <label className="task-field">Notes <span className="field-optional">Optional</span><textarea rows="3" maxLength={2000} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Add a few details" /></label>
-    <div className="reminder-fields"><label>Date<input type="date" required value={date} onChange={(event) => setDate(event.target.value)} /></label><label>Time<input type="time" required value={time} onChange={(event) => setTime(event.target.value)} /></label></div>
+    <label className="task-field">Notes <span className="field-optional">Optional</span><textarea rows="3" maxLength={2000} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Add a few details" />
+    </label>
+
+    <div className="reminder-fields">
+      <label>Date<input type="date" required value={date} onChange={(event) => setDate(event.target.value)} /></label><label>Time<input type="time" required value={time} onChange={(event) => setTime(event.target.value)} /></label>
+    </div>
+    
     <label className="task-field">Remind me
       <select value={reminderMinutes} onChange={(event) => setReminderMinutes(event.target.value)}>
-        <option value="">No reminder</option><option value="0">At the time of the task</option><option value="5">5 minutes before</option><option value="10">10 minutes before</option><option value="30">30 minutes before</option><option value="60">1 hour before</option>
+        <option value="">No reminder</option><option value="0">At the time of the task</option><option value="5">5 
+          minutes before</option><option value="10">10 minutes before</option><option value="30">30 minutes before</option><option value="60">1 hour before</option>
       </select>
     </label>
+
     <label className="task-field">Repeat
-      <select value={frequency} disabled={canEditOccurrence && scope === 'occurrence'} onChange={(event) => { setFrequency(event.target.value); if (event.target.value === 'weekly' && !selectedDays.length) setSelectedDays([new Date(`${date}T00:00:00`).getDay()]) }}><option value="none">Only this day</option><option value="daily">Every day</option><option value="weekly">Every week</option><option value="weekdays">Weekdays</option><option value="monthly">Every month</option></select>
+      <select value={frequency} disabled={canEditOccurrence && scope === 'occurrence'} onChange={(event) => {           
+        setFrequency(event.target.value); if (event.target.value === 'weekly' && !selectedDays.length) setSelectedDays([new Date(`${date}T00:00:00`).getDay()]) }}><option value="none">Only this day</option><option value="daily">Every day</option><option value="weekly">Every week</option><option value="weekdays">Weekdays</option><option value="monthly">Every month</option>
+      </select>
     </label>
-    {canEditOccurrence && scope === 'occurrence' && <small className="scope-note">Repeat settings apply to the series.</small>}
+
+    {canEditOccurrence && scope === 'occurrence' && 
+    <small className="scope-note">Repeat settings apply to the series.</small>}
+
     {frequency !== 'none' && <>
       {frequency === 'weekly' && <fieldset className="weekday-picker"><legend>Repeat on</legend>{weekdays.map(([label, day]) => <label key={day}><input type="checkbox" checked={selectedDays.includes(day)} onChange={() => toggleDay(day)} />{label}</label>)}</fieldset>}
-      <label className="task-field">Repeat for<select value={repeatPeriod} onChange={(event) => setRepeatPeriod(event.target.value)}><option value="month">This month only</option><option value="year">Keep repeating through December</option></select></label>
+
+      <label className="task-field">Repeat for<select value={repeatPeriod} onChange={(event) => setRepeatPeriod(event.
+        target.value)}><option value="month">This month only</option><option value="year">Keep repeating through December</option></select>
+      </label>
     </>}
-    {canEditOccurrence && <fieldset className="scope-picker"><legend>Apply changes to</legend><label><input type="radio" name="task-scope" value="occurrence" checked={scope === 'occurrence'} onChange={() => setScope('occurrence')} />This occurrence only</label><label><input type="radio" name="task-scope" value="series" checked={scope === 'series'} onChange={() => setScope('series')} />Entire series</label></fieldset>}
-    <div className="task-editor-actions">{initial.mode === 'edit' && <button className="delete-task-action" type="button" onClick={() => onDelete(initial.task)}>Delete task</button>}<button className="primary-button modal-submit" type="submit">{initial.mode === 'edit' ? 'Save changes' : 'Add task'}</button></div>
+
+    {canEditOccurrence && 
+    <fieldset className="scope-picker"><legend>Apply changes to</legend><label><input type="radio" name="task-scope" 
+      value="occurrence" checked={scope === 'occurrence'} onChange={() => setScope('occurrence')} />This occurrence only</label><label><input type="radio" name="task-scope" value="series" checked={scope === 'series'} onChange={() => setScope('series')} />Entire series</label>
+    </fieldset>}
+
+    <div className="task-editor-actions">{initial.mode === 'edit' && <button className="delete-task-action" 
+      type="button" onClick={() => onDelete(initial.task)}>Delete task</button>}<button className="primary-button modal-submit" type="submit">{initial.mode === 'edit' ? 'Save changes' : 'Add task'}</button>
+    </div>
+    
   </form></div>
 }

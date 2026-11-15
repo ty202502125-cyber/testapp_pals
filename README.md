@@ -16,23 +16,20 @@ npm run build
 npm run preview
 ```
 
-## Google sign-in, sync, and Gemini tutor
+## Google sync and free ChatGPT handoff
 
 The app supports Google sign-in and private cross-device sync using the Google Drive `appDataFolder` scope. A fresh install can restore tasks, notes, flashcards, and appearance settings after the same Google account signs in. Sign-in requires OAuth setup by the app owner; a visitor's Google account alone cannot configure a deployed app.
 
-1. Create a Google Cloud project. Enable **Google Drive API** and **Generative Language API**.
+1. Create a Google Cloud project. Enable **Google Drive API**.
 2. Configure the OAuth consent screen and create an **OAuth client ID → Web application**. Add `http://localhost:5173` and your deployed HTTPS origin to Authorized JavaScript origins.
 3. Copy `.env.example` to `.env.local` for local use and set `VITE_GOOGLE_CLIENT_ID`.
-4. Create a Gemini API key in Google AI Studio. Set `GEMINI_API_KEY` in `.env.local` for local use and as a server-side environment variable in Vercel. Do not name this `VITE_GEMINI_API_KEY`: `GEMINI_API_KEY` must remain server-only.
-5. Deploy to Vercel. The `/api/chat` serverless function calls Gemini with the server-side key and requires a valid Google sign-in token. Set `VITE_GOOGLE_CLIENT_ID`, `GEMINI_API_KEY`, and optionally `GEMINI_MODEL` in Vercel’s project environment settings, then redeploy.
+4. Set `VITE_GOOGLE_CLIENT_ID` in your deployment environment and redeploy. Google sign-in is only used for the app's private Google Drive sync.
 
-`GEMINI_MODEL` defaults to `gemini-3.5-flash-lite`. Gemini API free-tier eligibility and quotas depend on the Google project, model, region, and current provider limits. API use is billed/limited separately from consumer Gemini or ChatGPT subscriptions. The app cannot use a consumer ChatGPT login as OpenAI API access.
-
-For Netlify deployment, the Vercel `/api/chat` function needs a Netlify Functions adapter before the tutor endpoint will work. The static PWA and Google Drive sync can still deploy there.
+The study tutor does not call an AI API. It prepares a tutoring prompt that you can copy into ChatGPT, then opens ChatGPT in a new tab. Sign in there with your ChatGPT account; ChatGPT Free can be used subject to OpenAI's current usage limits. The app does not connect to or read your ChatGPT account, and signing into this app with Google does not sign you into ChatGPT. ChatGPT's consumer plans and API billing are separate ([OpenAI billing details](https://help.openai.com/en/articles/9039756-managing-billing-for-chatgpt-and-the-api-platform)).
 
 ### Data and privacy
 
-Local tasks, flashcards, and notes stay in browser storage until Google is connected. When connected, the app stores one JSON file in the signed-in user's private Google Drive app data; it does not read regular Drive files. Gemini requests include only the chat messages typed into the tutor. PDF file contents are not extracted or sent to Gemini. The OAuth access token stays in memory and must be re-authorized after it expires. Google OAuth consent-screen verification may be required before public distribution.
+Local tasks, flashcards, and notes stay in browser storage until Google is connected. When connected, the app stores one JSON file in the signed-in user's private Google Drive app data; it does not read regular Drive files. The tutor copies a prompt only when you select its copy button. PDF file contents are not extracted or sent to ChatGPT by this app. The OAuth access token stays in memory and must be re-authorized after it expires. Google OAuth consent-screen verification may be required before public distribution.
 
 The development server runs at the URL Vite prints (usually `http://localhost:5173`). PWA service-worker registration is enabled for production builds; install prompts and service workers require HTTPS outside localhost.
 
@@ -49,7 +46,7 @@ The manifest is at `public/manifest.json`; the production service worker is `pub
 
 ## Scope and integrations
 
-This is a front-end prototype, not a complete production ecosystem. Task date/time reminders use the Web Notifications API and are checked while the app is running; active pages also play an alarm tone. Browser timers and audio cannot wake a suspended or closed app, and exact alarm delivery is not guaranteed. Android exact alarms that work when the app is closed require a native Android app and the appropriate Android alarm/notification permissions. An APK was not built in this workspace because Android SDK/Gradle tooling is not installed. A Windows native installer likewise needs a desktop build pipeline. The PDF viewer uses the browser’s built-in PDF renderer; it does not extract text or persist uploaded PDF files. AI chat requires the Gemini backend environment key. Never place Gemini or OpenAI API keys in browser code; proxy requests through an authenticated server. The PWA service worker provides an offline app shell after assets have been visited online; it is not a background alarm scheduler. The in-memory chat endpoint should be paired with durable rate limiting and abuse monitoring before public launch.
+This is a front-end prototype, not a complete production ecosystem. Task date/time reminders use the Web Notifications API and are checked while the app is running; active pages also play an alarm tone. Browser timers and audio cannot wake a suspended or closed app, and exact alarm delivery is not guaranteed. Android exact alarms that work when the app is closed require a native Android app and the appropriate Android alarm/notification permissions. An APK was not built in this workspace because Android SDK/Gradle tooling is not installed. A Windows native installer likewise needs a desktop build pipeline. The PDF viewer uses the browser’s built-in PDF renderer; it does not extract text or persist uploaded PDF files. The tutor hands prompts off to ChatGPT in a separate tab and does not require an API key. The PWA service worker provides an offline app shell after assets have been visited online; it is not a background alarm scheduler.
 
 ## Current dependencies
 

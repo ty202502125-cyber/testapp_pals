@@ -1,48 +1,76 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 
-export default function AITutor({ account, accessToken, onConnect }) {
-  const [messages, setMessages] = useState([])
-  const [draft, setDraft] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const listRef = useRef(null)
+const CHATGPT_URL = 'https://chatgpt.com/'
 
-  const send = async (event) => {
-    event.preventDefault()
-    const question = draft.trim()
-    if (!question || loading) return
-    if (!accessToken) { setError('Sign in with Google to start your study session.'); return }
-    const nextMessages = [...messages.slice(-14), { role: 'user', content: question }]
-    setMessages(nextMessages)
-    setDraft('')
-    setError('')
-    setLoading(true)
+function makeTutorPrompt(question) {
+  return `Act as a patient study tutor. Help me understand the topic instead of simply giving me an answer. Explain it in clear steps, use a simple example, and ask a short follow-up question when useful.\n\nMy question: ${question.trim()}`
+}
+
+async function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text)
+    return
+  }
+
+  const field = document.createElement('textarea')
+  field.value = text
+  field.style.position = 'fixed'
+  field.style.opacity = '0'
+  document.body.append(field)
+  field.select()
+  const copied = document.execCommand('copy')
+  field.remove()
+  if (!copied) throw new Error('Clipboard access is unavailable in this browser.')
+}
+
+export default function AITutor() {
+  const [question, setQuestion] = useState('')
+  const [status, setStatus] = useState('')
+
+  const copyPrompt = async () => {
+    const trimmedQuestion = question.trim()
+    if (!trimmedQuestion) {
+      setStatus('Write a question first.')
+      return
+    }
+
     try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ messages: nextMessages }),
-      })
-      const result = await response.json()
-      if (!response.ok) throw new Error(result.error || 'The tutor couldn’t answer just now.')
-      setMessages((items) => [...items, { role: 'assistant', content: result.answer }])
-      requestAnimationFrame(() => listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' }))
-    } catch (sendError) {
-      setError(sendError.message || 'Could not reach the tutor. Check your connection and try again.')
-    } finally {
-      setLoading(false)
+      await copyText(makeTutorPrompt(trimmedQuestion))
+      setStatus('Tutor prompt copied. Paste it into ChatGPT.')
+    } catch {
+      setStatus('Could not copy automatically. Select your question and copy it manually.')
     }
   }
 
   return <section className="panel tutor-panel">
-    <div className="tutor-header"><div><div className="eyebrow">CHECK STUDY TUTOR</div><h2>Let’s figure it out together.</h2><p>Ask a question and work through it step by step.</p></div><span className="tutor-badge">✦ Gemini</span></div>
-    <div className="tutor-messages" ref={listRef} aria-live="polite">
-      {!messages.length && <div className="tutor-welcome"><span>✧</span><strong>What are you learning today?</strong><small>Try: “Can you explain derivatives with a simple example?”</small></div>}
-      {messages.map((message, index) => <div className={`tutor-message ${message.role}`} key={`${index}-${message.role}`}><span>{message.role === 'user' ? 'You' : 'Check tutor'}</span><p>{message.content}</p></div>)}
-      {loading && <div className="tutor-message assistant"><span>Check tutor</span><p className="thinking">Thinking through it…</p></div>}
+    <div className="tutor-header">
+      <div>
+        <div className="eyebrow">FREE CHATGPT HANDOFF</div>
+        <h2>Study with ChatGPT</h2>
+        <p>Prepare a tutor prompt, then continue in ChatGPT Free in a new tab.</p>
+      </div>
+      <span className="tutor-badge">ChatGPT Free</span>
     </div>
-    {error && <p className="tutor-error" role="alert">{error}</p>}
-    <form className="tutor-compose" onSubmit={send}><textarea aria-label="Ask the study tutor" rows="2" maxLength={8000} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} placeholder="Ask your study question…"/><button type="submit" aria-label="Send question" disabled={loading || !draft.trim()}>↑</button></form>
-    <div className="tutor-footer"><span>{account ? `Signed in as ${account.email || 'Google account'}` : 'Sign in to use your Gemini study tutor.'}</span>{!account && <button onClick={onConnect}>Connect Google <span>→</span></button>}</div>
+
+    <label className="tutor-question-label" htmlFor="tutor-question">What would you like help understanding?</label>
+    <textarea
+      id="tutor-question"
+      className="tutor-question"
+      rows="4"
+      maxLength={8000}
+      value={question}
+      onChange={(event) => {
+        setQuestion(event.target.value)
+        setStatus('')
+      }}
+      placeholder="For example: Can you explain derivatives with a simple example?"
+    />
+
+    <div className="tutor-handoff-actions">
+      <button className="primary-button" type="button" onClick={copyPrompt}>Copy tutor prompt</button>
+      <a className="tutor-open-chatgpt" href={CHATGPT_URL} target="_blank" rel="noopener noreferrer">Open ChatGPT ↗</a>
+    </div>
+    <p className="tutor-handoff-status" aria-live="polite">{status || 'No AI account connection is needed here. Sign in to ChatGPT in the new tab if prompted.'}</p>
+    <p className="tutor-handoff-note">Your question is copied only when you choose Copy. This app does not connect to your ChatGPT account or read your files. ChatGPT Free has its own usage limits.</p>
   </section>
 }
