@@ -2,30 +2,40 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import './pwa.css'
 import './responsive.css'
-import AITutor from './components/AITutor.jsx'
-import AccountDialog from './components/AccountDialog.jsx'
 import ScheduleCalendar from './components/ScheduleCalendar.jsx'
 import TaskEditor from './components/TaskEditor.jsx'
 import TaskDeleteDialog from './components/TaskDeleteDialog.jsx'
 import TaskList from './components/TaskList.jsx'
 import CustomCursor from './components/CustomCursor.jsx'
 import { expandTaskOccurrences, localDateKey, saveCalendarTask, deleteCalendarTask } from './services/calendarTasks.js'
-import { connectGoogle, preloadGoogleIdentity, revokeGoogleToken, saveGoogleData } from './services/googleDrive.js'
 
+/* 5 sections: Today (Overview + Schedule), Tasks, Study (Study room + Flashcards),
+   Materials (PDF only), Grades. Midnight Focus theme, lime cursor, same data model. */
 const nav = [
-  ['Overview', '⌂'],
-  ['My schedule', '▦'],
-  ['My tasks', '☷'],
-  ['Study materials', '▧'],
-  ['Flashcards', '▤'],
-  ['Study room', '◷'],
-  ['Grade tracker', '◉'],
+  ['Today', '⌂'],
+  ['Tasks', '☷'],
+  ['Study', '◷'],
+  ['Materials', '▧'],
+  ['Grades', '◉'],
 ]
 
 const TIMER_PRESETS = [
   { id: 'pomodoro', label: '25m Pomodoro', focus: 25 * 60, rest: 5 * 60 },
   { id: 'deep', label: '50m Deep Work', focus: 50 * 60, rest: 10 * 60 },
   { id: 'sprint', label: '15m Sprint', focus: 15 * 60, rest: 3 * 60 },
+]
+
+/* localStorage keys — identical to the previous version, so existing data survives. */
+const BACKUP_KEYS = [
+  'check-tasks',
+  'check-cards',
+  'check-grades',
+  'check-note',
+  'check-focus-stats',
+  'check-dark',
+  'check-reminders-enabled',
+  'check-reminder-sound',
+  'check-reminder-deliveries',
 ]
 
 const read = (key, fallback) => {
@@ -57,7 +67,6 @@ wipeExistingStudyData()
 const today = new Date()
 const todayKey = localDateKey(today)
 const todayLong = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric' }).format(today)
-const todayShort = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).format(today)
 
 const formatDue = (task) => {
   if (!task.dueAt) return task.due || 'Anytime'
@@ -104,29 +113,23 @@ const getInitialFocusStats = () => {
     dateKey: todayKey,
     secondsToday: 0,
     sessionsToday: 0,
-    streakDays: 0,
-    lastActiveDate: '',
   })
   if (saved.dateKey !== todayKey) {
-    const yesterday = new Date()
-    yesterday.setDate(yesterday.getDate() - 1)
-    const yesterdayKey = localDateKey(yesterday)
-    const keptStreak = saved.lastActiveDate === yesterdayKey ? saved.streakDays : 0
     return {
       dateKey: todayKey,
       secondsToday: 0,
       sessionsToday: 0,
-      streakDays: keptStreak,
-      lastActiveDate: saved.lastActiveDate,
     }
   }
-  return saved
+  return {
+    dateKey: saved.dateKey,
+    secondsToday: saved.secondsToday || 0,
+    sessionsToday: saved.sessionsToday || 0,
+  }
 }
 
-const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || ''
-
 function App() {
-  const [page, setPage] = useState('Overview')
+  const [page, setPage] = useState('Today')
   const [tasks, setTasks] = useState(() => read('check-tasks', []))
   const [cards, setCards] = useState(() => read('check-cards', []))
   const [gradeItems, setGradeItems] = useState(() => read('check-grades', []))
@@ -135,8 +138,6 @@ function App() {
   const [taskEditor, setTaskEditor] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [alarmTitle, setAlarmTitle] = useState('Time to check in with yourself.')
-  const [installPrompt, setInstallPrompt] = useState(null)
-  const [installHint, setInstallHint] = useState(false)
   const [reviewing, setReviewing] = useState(false)
   const [revealed, setRevealed] = useState(false)
 
@@ -147,12 +148,6 @@ function App() {
   const [timerOn, setTimerOn] = useState(false)
 
   const [dark, setDark] = useState(() => read('check-dark', false))
-  const [accountDialog, setAccountDialog] = useState(false)
-  const [googleAccount, setGoogleAccount] = useState(null)
-  const [googleToken, setGoogleToken] = useState('')
-  const [cloudReady, setCloudReady] = useState(false)
-  const [cloudStatus, setCloudStatus] = useState('local')
-  const cloudFileId = useRef(null)
   const [alarm, setAlarm] = useState(false)
   const [toast, setToast] = useState('')
   const [remindersEnabled, setRemindersEnabled] = useState(() => read('check-reminders-enabled', true))
@@ -160,6 +155,12 @@ function App() {
     'Notification' in window ? Notification.permission : 'unsupported'
   )
   const [reminderSoundEnabled, setReminderSoundEnabled] = useState(() => read('check-reminder-sound', true))
+
+  // Schedule calendar state (Day / Week only)
+  const [view, setView] = useState(() => (window.matchMedia?.('(max-width: 620px)').matches ? 'Day' : 'Week'))
+  const [calendarDate, setCalendarDate] = useState(() => new Date())
+
+  const importInputRef = useRef(null)
 
   useEffect(() => { localStorage.setItem('check-tasks', JSON.stringify(tasks)) }, [tasks])
   useEffect(() => { localStorage.setItem('check-cards', JSON.stringify(cards)) }, [cards])
@@ -176,32 +177,6 @@ function App() {
     document.addEventListener('visibilitychange', refreshPermission)
     return () => document.removeEventListener('visibilitychange', refreshPermission)
   }, [])
-
-  useEffect(() => {
-    if (googleClientId) preloadGoogleIdentity().catch(() => {})
-  }, [])
-
-  useEffect(() => {
-    if (!googleToken || !cloudReady) return undefined
-    const timer = window.setTimeout(() => {
-      setCloudStatus('syncing')
-      saveGoogleData(googleToken, cloudFileId.current, {
-        tasks,
-        cards,
-        gradeItems,
-        focusStats,
-        note,
-        dark,
-        updatedAt: new Date().toISOString(),
-      })
-        .then((id) => {
-          cloudFileId.current = id
-          setCloudStatus('synced')
-        })
-        .catch(() => setCloudStatus('error'))
-    }, 700)
-    return () => window.clearTimeout(timer)
-  }, [googleToken, cloudReady, tasks, cards, gradeItems, focusStats, note, dark])
 
   useEffect(() => {
     if (!remindersEnabled || notificationPermission !== 'granted') return undefined
@@ -255,15 +230,6 @@ function App() {
     return () => window.clearInterval(interval)
   }, [tasks, remindersEnabled, notificationPermission])
 
-  useEffect(() => {
-    const handler = (event) => {
-      event.preventDefault()
-      setInstallPrompt(event)
-    }
-    window.addEventListener('beforeinstallprompt', handler)
-    return () => window.removeEventListener('beforeinstallprompt', handler)
-  }, [])
-
   // Countdown + real focus time accumulator
   useEffect(() => {
     if (!timerOn) return undefined
@@ -273,13 +239,10 @@ function App() {
           const currentKey = localDateKey(new Date())
           const baseSeconds = prev.dateKey === currentKey ? prev.secondsToday : 0
           const baseSessions = prev.dateKey === currentKey ? prev.sessionsToday : 0
-          const nextStreak = prev.lastActiveDate === currentKey ? Math.max(1, prev.streakDays) : prev.streakDays + 1
           return {
             dateKey: currentKey,
             secondsToday: baseSeconds + 1,
             sessionsToday: baseSessions,
-            streakDays: nextStreak,
-            lastActiveDate: currentKey,
           }
         })
       }
@@ -290,7 +253,8 @@ function App() {
           playSoftChime(587.33, 0.45)
           if (timerMode === 'focus') {
             setFocusStats((prev) => ({
-              ...prev,
+              dateKey: prev.dateKey,
+              secondsToday: prev.secondsToday,
               sessionsToday: (prev.dateKey === localDateKey(new Date()) ? prev.sessionsToday : 0) + 1,
             }))
             setTimerMode('break')
@@ -336,7 +300,7 @@ function App() {
         }
         return
       }
-      if (!isTyping && !taskEditor && !accountDialog && e.key.toLowerCase() === 'n' && !e.metaKey && !e.ctrlKey) {
+      if (!isTyping && !taskEditor && e.key.toLowerCase() === 'n' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         openTaskEditor()
       }
@@ -360,6 +324,32 @@ function App() {
       .slice(0, 3)
   }, [tasks])
 
+  const todayOccurrences = useMemo(() => {
+    const start = new Date()
+    start.setHours(0, 0, 0, 0)
+    const end = new Date(start.getTime() + 24 * 60 * 60 * 1000)
+    return expandTaskOccurrences(tasks, start, end)
+      .filter((item) => item.dueAt)
+      .sort((a, b) => new Date(a.dueAt) - new Date(b.dueAt))
+  }, [tasks])
+
+  const weekStrip = useMemo(() => {
+    const start = new Date()
+    start.setHours(0, 0, 0, 0)
+    const end = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000)
+    const occurrences = expandTaskOccurrences(tasks, start, end)
+    return Array.from({ length: 7 }, (_, index) => {
+      const day = new Date(start)
+      day.setDate(start.getDate() + index)
+      const key = localDateKey(day)
+      return {
+        key,
+        date: day,
+        count: occurrences.filter((item) => item.occurrenceDate === key && !item.done).length,
+      }
+    })
+  }, [tasks])
+
   const totalDuration = timerMode === 'focus' ? activePreset.focus : activePreset.rest
   const progressDeg = Math.max(0, Math.min(360, (seconds / totalDuration) * 360))
   const timeLabel = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
@@ -373,44 +363,109 @@ function App() {
     setSeconds(next.focus)
   }
 
-  const install = async () => {
-    if (installPrompt) {
-      await installPrompt.prompt()
-      setInstallPrompt(null)
-    } else {
-      setInstallHint(true)
-    }
+  const moveCalendar = (direction) =>
+    setCalendarDate((current) => {
+      const next = new Date(current)
+      if (view === 'Day') next.setDate(next.getDate() + direction)
+      else next.setDate(next.getDate() + 7 * direction)
+      return next
+    })
+
+  /* ---------- Backup: Export / Import JSON (replaces Google Drive sync) ---------- */
+  const exportBackup = () => {
+    const data = {}
+    BACKUP_KEYS.forEach((key) => {
+      const value = localStorage.getItem(key)
+      if (value === null) return
+      try {
+        data[key] = JSON.parse(value)
+      } catch {
+        data[key] = value
+      }
+    })
+    const blob = new Blob(
+      [JSON.stringify({ app: 'check', version: 1, exportedAt: new Date().toISOString(), data }, null, 2)],
+      { type: 'application/json' }
+    )
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `check-backup-${localDateKey(new Date())}.json`
+    link.click()
+    URL.revokeObjectURL(url)
+    setToast('Backup downloaded.')
   }
 
-  const signInWithGoogle = async () => {
-    setCloudStatus('connecting')
-    try {
-      const connection = await connectGoogle(googleClientId)
-      setGoogleToken(connection.token)
-      setGoogleAccount({ email: connection.user.email, name: connection.user.name, picture: connection.user.picture })
-      cloudFileId.current = connection.fileId
-      setCloudReady(true)
-      setCloudStatus('syncing')
-      setToast('Google connected. Your workspace will sync automatically.')
-    } catch (error) {
-      setCloudStatus('local')
-      setToast(error.message || 'Google sign-in did not complete.')
-    }
+  const importBackup = (file) => {
+    if (!file) return
+    file
+      .text()
+      .then((text) => {
+        let parsed
+        try {
+          parsed = JSON.parse(text)
+        } catch {
+          setToast('That file is not a Check backup.')
+          return
+        }
+        const data = parsed?.data
+        if (!data || typeof data !== 'object') {
+          setToast('That file is not a Check backup.')
+          return
+        }
+        Object.entries(data).forEach(([key, value]) => {
+          if (BACKUP_KEYS.includes(key)) {
+            localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value))
+          }
+        })
+        window.location.reload()
+      })
+      .catch(() => setToast('Could not read that file.'))
   }
 
-  const signOutGoogle = async () => {
-    try {
-      await revokeGoogleToken(googleToken)
-    } catch {
-      /* Clear local session even if offline */
+  const changeNotificationSetting = async () => {
+    if (notificationPermission === 'unsupported') {
+      setToast('This browser does not support notifications.')
+      return
     }
-    setGoogleToken('')
-    setGoogleAccount(null)
-    setCloudReady(false)
-    setCloudStatus('local')
-    cloudFileId.current = null
-    setAccountDialog(false)
-    setToast('Signed out. Your data remains saved on this device.')
+    if (notificationPermission === 'denied') {
+      const permission = Notification.permission
+      setNotificationPermission(permission)
+      if (permission === 'granted') {
+        setRemindersEnabled(true)
+        setToast('Task reminders are on.')
+      } else {
+        setToast('Notifications are blocked by your browser. Enable them in site settings.')
+      }
+      return
+    }
+    if (notificationPermission === 'default') {
+      const permission = await Notification.requestPermission().catch(() => 'denied')
+      setNotificationPermission(permission)
+      setRemindersEnabled(permission === 'granted')
+      setToast(permission === 'granted' ? 'Task reminders are on.' : 'Notifications were not enabled.')
+      return
+    }
+    setRemindersEnabled((enabled) => !enabled)
+    setToast(remindersEnabled ? 'Task reminders are paused.' : 'Task reminders are on.')
+  }
+
+  const rateCard = (rating) => {
+    if (!currentCard) return
+    const days = rating <= 1 ? 1 : rating === 2 ? 2 : rating === 3 ? 3 : 6
+    const dueAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString()
+    setCards((items) =>
+      items.map((card) =>
+        card.id === currentCard.id
+          ? { ...card, due: false, dueAt, nextReview: days === 1 ? 'tomorrow' : `in ${days} days` }
+          : card
+      )
+    )
+    setRevealed(false)
+    if (!cards.some((card) => cardIsDue(card) && card.id !== currentCard.id)) {
+      setReviewing(false)
+      setToast('Review complete — nice work!')
+    }
   }
 
   const openTaskEditor = (initialDate = localDateKey(new Date())) => setTaskEditor({ mode: 'create', initialDate })
@@ -472,51 +527,6 @@ function App() {
     setToast(scope === 'occurrence' ? 'Occurrence removed.' : 'Task removed.')
   }
 
-  const changeNotificationSetting = async () => {
-    if (notificationPermission === 'unsupported') {
-      setToast('This browser does not support notifications.')
-      return
-    }
-    if (notificationPermission === 'denied') {
-      const permission = Notification.permission
-      setNotificationPermission(permission)
-      if (permission === 'granted') {
-        setRemindersEnabled(true)
-        setToast('Task reminders are on.')
-      } else {
-        setToast('Notifications are blocked by your browser. Enable them in site settings.')
-      }
-      return
-    }
-    if (notificationPermission === 'default') {
-      const permission = await Notification.requestPermission().catch(() => 'denied')
-      setNotificationPermission(permission)
-      setRemindersEnabled(permission === 'granted')
-      setToast(permission === 'granted' ? 'Task reminders are on.' : 'Notifications were not enabled.')
-      return
-    }
-    setRemindersEnabled((enabled) => !enabled)
-    setToast(remindersEnabled ? 'Task reminders are paused.' : 'Task reminders are on.')
-  }
-
-  const rateCard = (rating) => {
-    if (!currentCard) return
-    const days = rating <= 1 ? 1 : rating === 2 ? 2 : rating === 3 ? 3 : 6
-    const dueAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString()
-    setCards((items) =>
-      items.map((card) =>
-        card.id === currentCard.id
-          ? { ...card, due: false, dueAt, nextReview: days === 1 ? 'tomorrow' : `in ${days} days` }
-          : card
-      )
-    )
-    setRevealed(false)
-    if (!cards.some((card) => cardIsDue(card) && card.id !== currentCard.id)) {
-      setReviewing(false)
-      setToast('Review complete — nice work!')
-    }
-  }
-
   return (
     <>
       <CustomCursor />
@@ -527,7 +537,7 @@ function App() {
           href="#home"
           onClick={(e) => {
             e.preventDefault()
-            setPage('Overview')
+            setPage('Today')
           }}
         >
           <span className="brand-mark">
@@ -541,8 +551,8 @@ function App() {
           <div>
             <strong>My workspace</strong>
             <small>
-              {focusStats.streakDays > 0
-                ? `${focusStats.streakDays}-day study streak`
+              {focusMinutesToday > 0
+                ? `${focusMinutesToday}m focused today`
                 : 'Ready when you are'}
             </small>
           </div>
@@ -562,10 +572,10 @@ function App() {
                 {icon}
               </span>
               {label}
-              {label === 'My tasks' && activeTasks.length > 0 && (
+              {label === 'Tasks' && activeTasks.length > 0 && (
                 <span className="nav-count">{activeTasks.length}</span>
               )}
-              {label === 'Flashcards' && dueCards.length > 0 && (
+              {label === 'Study' && dueCards.length > 0 && (
                 <span className="nav-count">{dueCards.length}</span>
               )}
             </button>
@@ -573,32 +583,38 @@ function App() {
         </nav>
 
         <div className="sidebar-bottom">
-          <div className="streak-card">
-            <div className="streak-top">
-              <span>⚡</span>
-              <span className="streak-days">{focusStats.streakDays} day streak</span>
-              <span className="streak-mins">{focusMinutesToday}m</span>
-            </div>
-            <strong>Today’s focus progress</strong>
-            <small>
-              {focusMinutesToday >= 50
-                ? 'Daily 50m goal crushed!'
-                : `${Math.max(0, 50 - focusMinutesToday)}m left to reach 50m goal`}
-            </small>
-            <div className="streak-bars" aria-hidden="true">
-              {[10, 20, 30, 40, 50].map((step) => (
-                <i key={step} className={focusMinutesToday >= step ? 'active' : ''} />
-              ))}
-            </div>
+          <div className="sidebar-foot">
+            <span>◌</span> Press <kbd className="kbd-hint">N</kbd> to quick-add a task
           </div>
+        </div>
+      </aside>
 
-          <button
-            type="button"
-            className="nav-item theme-toggle"
-            aria-pressed={dark}
-            onClick={() => setDark((value) => !value)}
-          >
-            <span className="nav-icon" aria-hidden="true">
+      <main className="main-area">
+        <header className="topbar">
+          <div className="topbar-title">{page}</div>
+          <div className="top-actions">
+            <button type="button" className="topbar-btn export-button" title="Download all your data as a JSON backup" onClick={exportBackup}>
+              ↓ Export
+            </button>
+            <label className="topbar-btn import-button" title="Restore a JSON backup">
+              ↑ Import
+              <input
+                type="file"
+                accept="application/json,.json"
+                ref={importInputRef}
+                onChange={(event) => {
+                  importBackup(event.target.files?.[0])
+                  event.target.value = ''
+                }}
+              />
+            </label>
+            <button
+              type="button"
+              className="icon-button theme-toggle"
+              aria-pressed={dark}
+              aria-label={dark ? 'Switch to light appearance' : 'Switch to dark appearance'}
+              onClick={() => setDark((value) => !value)}
+            >
               {dark ? (
                 <svg viewBox="0 0 24 24">
                   <circle cx="12" cy="12" r="4" />
@@ -609,53 +625,12 @@ function App() {
                   <path d="M20.5 15.2A8.5 8.5 0 0 1 8.8 3.5 8.5 8.5 0 1 0 20.5 15.2Z" />
                 </svg>
               )}
-            </span>
-            <span className="theme-label">{dark ? 'Light appearance' : 'Dark appearance'}</span>
-          </button>
-
-          <button className="nav-item install-side" onClick={install}>
-            <span className="nav-icon">↓</span>
-            <span className="install-label">Install the app</span>
-            <span className="install-arrow">↗</span>
-          </button>
-
-          <div className="sidebar-foot">
-            <span>◌</span> Press <kbd className="kbd-hint">N</kbd> to quick-add a task
-          </div>
-        </div>
-      </aside>
-
-      <main className="main-area">
-        <header className="topbar">
-          <div className="breadcrumbs">
-            My workspace <span>/</span> <strong>{page}</strong>
-          </div>
-          <div className="top-actions">
-            <button
-              type="button"
-              className="quick-add-pill"
-              title="Quick add task (Shortcut: N)"
-              onClick={() => setShowAdd(true)}
-            >
-              <span>＋</span> Quick task
-            </button>
-            <div className="today-pill" role="status">
-              ◷ <span>{todayShort}</span>
-            </div>
-            <button
-              type="button"
-              className="avatar small-avatar"
-              aria-label="Google account and sync settings"
-              title={googleAccount ? `Synced: ${googleAccount.email}` : 'Account and cloud sync'}
-              onClick={() => setAccountDialog(true)}
-            >
-              {googleAccount?.name?.[0]?.toUpperCase() || '✓'}
             </button>
           </div>
         </header>
 
         <div className="page-content" key={page}>
-          {page === 'Overview' ? (
+          {page === 'Today' ? (
             <>
               <div className="greeting-row anim-rise">
                 <div>
@@ -713,7 +688,7 @@ function App() {
                   <button
                     className="inline-link"
                     onClick={() => {
-                      if (cards.length === 0) setPage('Flashcards')
+                      if (cards.length === 0) setPage('Study')
                       else {
                         setReviewing(true)
                         setRevealed(false)
@@ -725,31 +700,43 @@ function App() {
                 </div>
               </div>
 
+              <div className="week-strip anim-rise" style={{ '--stagger': 4 }} aria-label="This week at a glance">
+                {weekStrip.map((day) => (
+                  <button
+                    type="button"
+                    key={day.key}
+                    className={`week-day${day.key === todayKey ? ' today' : ''}`}
+                    title={`${day.count} ${day.count === 1 ? 'task' : 'tasks'} on ${new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'short', day: 'numeric' }).format(day.date)}`}
+                    onClick={() => setPage('Tasks')}
+                  >
+                    <small>{new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(day.date)}</small>
+                    <strong>{day.date.getDate()}</strong>
+                    <span>{day.count} {day.count === 1 ? 'task' : 'tasks'}</span>
+                  </button>
+                ))}
+              </div>
+
               <div className="content-grid">
-                <section className="panel tasks-panel anim-rise" style={{ '--stagger': 4 }}>
+                <section className="panel tasks-panel anim-rise" style={{ '--stagger': 5 }}>
                   <div className="panel-heading">
                     <div>
                       <h2>
-                        Today’s tasks <span className="heading-count">{activeTasks.length}</span>
+                        Today’s tasks <span className="heading-count">{todayOccurrences.filter((item) => !item.done).length}</span>
                       </h2>
                       <p>A small step is still a step forward.</p>
                     </div>
-                    <button className="more-button" onClick={() => setPage('My tasks')}>
+                    <button className="more-button" onClick={() => setPage('Tasks')}>
                       See all <span>→</span>
                     </button>
                   </div>
 
                   <div className="task-list">
-                    {tasks.slice(0, 4).map((task) => (
-                      <div className={`task-row${task.done ? ' task-done' : ''}`} key={task.id}>
+                    {todayOccurrences.slice(0, 4).map((task) => (
+                      <div className={`task-row${task.done ? ' task-done' : ''}`} key={task.occurrenceId}>
                         <button
                           className={`check-circle ${task.done ? 'checked' : ''}`}
                           aria-label={task.done ? 'Mark incomplete' : 'Complete task'}
-                          onClick={() =>
-                            setTasks((items) =>
-                              items.map((item) => (item.id === task.id ? { ...item, done: !item.done } : item))
-                            )
-                          }
+                          onClick={() => toggleTaskOccurrence(task)}
                         >
                           {task.done && '✓'}
                         </button>
@@ -759,7 +746,7 @@ function App() {
                             <span className={`subject-dot ${task.color}`} />
                             {task.subject}
                             <span className="meta-dot">·</span>
-                            {formatDue(task)}
+                            {formatTimeOnly(task.dueAt)}
                           </div>
                         </div>
                         <button className="task-more" aria-label="Delete task" onClick={() => setDeleteTarget(task)}>
@@ -767,7 +754,7 @@ function App() {
                         </button>
                       </div>
                     ))}
-                    {tasks.length === 0 && (
+                    {todayOccurrences.length === 0 && (
                       <p className="empty-text">Nothing here yet. Add a task when you’re ready.</p>
                     )}
                   </div>
@@ -777,18 +764,14 @@ function App() {
                   </button>
                 </section>
 
-                <section className="panel schedule-panel anim-rise" style={{ '--stagger': 5 }}>
+                <section className="panel schedule-panel anim-rise" style={{ '--stagger': 6 }}>
                   <div className="panel-heading">
                     <div>
                       <h2>Coming up</h2>
                       <p>Your next 7 days at a glance.</p>
                     </div>
-                    <button
-                      className="calendar-button"
-                      title="Open full schedule"
-                      onClick={() => setPage('My schedule')}
-                    >
-                      ▦
+                    <button className="more-button" onClick={() => setPage('Tasks')}>
+                      See all <span>→</span>
                     </button>
                   </div>
 
@@ -840,15 +823,41 @@ function App() {
                   ) : (
                     <div className="empty-text">Your calendar is clear.</div>
                   )}
-
-                  <button className="schedule-link" onClick={() => setPage('My schedule')}>
-                    Open calendar <span>→</span>
-                  </button>
                 </section>
               </div>
 
+              <section className="calendar-section anim-rise" style={{ '--stagger': 7 }}>
+                <div className="panel-heading">
+                  <div>
+                    <h2>Your schedule</h2>
+                    <p>Day or week — your tasks on the calendar.</p>
+                  </div>
+                </div>
+                <ScheduleCalendar
+                  date={calendarDate}
+                  view={view}
+                  onView={setView}
+                  onMove={moveCalendar}
+                  onDateSelect={(date) => {
+                    setCalendarDate(date)
+                    setView('Day')
+                  }}
+                  subjects={[]}
+                  tasks={tasks}
+                  onCreateTask={(date) => setTaskEditor({ mode: 'create', initialDate: date })}
+                  onEditTask={editTask}
+                  onDeleteTask={setDeleteTarget}
+                  onToggleTask={toggleTaskOccurrence}
+                  remindersEnabled={remindersEnabled}
+                  reminderSoundEnabled={reminderSoundEnabled}
+                  onReminderSoundSetting={() => setReminderSoundEnabled((enabled) => !enabled)}
+                  notificationPermission={notificationPermission}
+                  onNotificationSetting={changeNotificationSetting}
+                />
+              </section>
+
               <section className="lower-grid">
-                <div className="panel focus-panel anim-rise" style={{ '--stagger': 6 }}>
+                <div className="panel focus-panel anim-rise" style={{ '--stagger': 8 }}>
                   <div className="focus-info">
                     <div className="focus-eyebrow">
                       <span>✳</span> {timerMode === 'focus' ? 'FOCUS SESSION' : 'SHORT BREAK'}
@@ -898,7 +907,7 @@ function App() {
                   <span className="focus-decor">✳</span>
                 </div>
 
-                <div className="panel note-panel anim-rise" style={{ '--stagger': 7 }}>
+                <div className="panel note-panel anim-rise" style={{ '--stagger': 9 }}>
                   <div className="note-heading">
                     <div className="note-icon">✎</div>
                     <div>
@@ -956,14 +965,9 @@ function App() {
               timerOn={timerOn}
               setTimerOn={setTimerOn}
               timeLabel={timeLabel}
-              note={note}
-              setNote={setNote}
+              focusStats={focusStats}
+              focusMinutesToday={focusMinutesToday}
               setToast={setToast}
-              remindersEnabled={remindersEnabled}
-              reminderSoundEnabled={reminderSoundEnabled}
-              onReminderSoundSetting={() => setReminderSoundEnabled((enabled) => !enabled)}
-              notificationPermission={notificationPermission}
-              onNotificationSetting={changeNotificationSetting}
             />
           )}
           <footer className="page-footer">
@@ -983,40 +987,6 @@ function App() {
 
       {deleteTarget && (
         <TaskDeleteDialog recurring={deleteTarget} onClose={() => setDeleteTarget(null)} onDelete={deleteTask} />
-      )}
-
-      {installHint && (
-        <div className="modal-backdrop" onClick={() => setInstallHint(false)}>
-          <div className="modal" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
-            <button
-              className="modal-close"
-              aria-label="Close install instructions"
-              onClick={() => setInstallHint(false)}
-            >
-              ×
-            </button>
-            <span className="modal-icon">↓</span>
-            <h2>Take Check with you</h2>
-            <p>
-              Install this site for quick access from your home screen. In your browser menu, choose{' '}
-              <strong>“Add to Home Screen”</strong> or <strong>“Install app.”</strong>
-            </p>
-            <button className="primary-button modal-submit" onClick={() => setInstallHint(false)}>
-              Got it
-            </button>
-          </div>
-        </div>
-      )}
-
-      {accountDialog && (
-        <AccountDialog
-          account={googleAccount}
-          status={cloudStatus}
-          configured={Boolean(googleClientId)}
-          onConnect={signInWithGoogle}
-          onDisconnect={signOutGoogle}
-          onClose={() => setAccountDialog(false)}
-        />
       )}
 
       {reviewing && (
@@ -1090,17 +1060,6 @@ function App() {
             <strong>Reminder</strong>
             <small>{alarmTitle}</small>
           </div>
-          <button
-            onClick={() => {
-              setAlarm(false)
-              setTimeout(() => {
-                setAlarmTitle('Snoozed reminder')
-                setAlarm(true)
-              }, 5 * 60 * 1000)
-            }}
-          >
-            Snooze 5m
-          </button>
           <button aria-label="Dismiss reminder" onClick={() => setAlarm(false)}>
             ×
           </button>
@@ -1109,8 +1068,10 @@ function App() {
 
       {toast && <div className="toast">✦ &nbsp;{toast}</div>}
     </div>
+    </>
   )
 }
+
 
 function SectionPage({
   page,
@@ -1138,21 +1099,10 @@ function SectionPage({
   timerOn,
   setTimerOn,
   timeLabel,
-  note,
-  setNote,
+  focusStats,
+  focusMinutesToday,
   setToast,
-  remindersEnabled,
-  reminderSoundEnabled,
-  onReminderSoundSetting,
-  notificationPermission,
-  onNotificationSetting,
 }) {
-  const [view, setView] = useState(() => (window.matchMedia?.('(max-width: 620px)').matches ? 'Day' : 'Week'))
-  const [calendarDate, setCalendarDate] = useState(() => new Date())
-  const [soundName, setSoundName] = useState('')
-  const audioRef = useRef(null)
-  const soundRef = useRef(null)
-
   // Flashcard creator state
   const [cardFront, setCardFront] = useState('')
   const [cardBack, setCardBack] = useState('')
@@ -1218,114 +1168,8 @@ function SectionPage({
       remainingWeight > 0 && Number.isFinite(target)
         ? ((target - earnedWeighted) / remainingWeight) * 100
         : null
-    const letter =
-      currentAvg == null
-        ? '—'
-        : currentAvg >= 90
-        ? 'A'
-        : currentAvg >= 80
-        ? 'B'
-        : currentAvg >= 70
-        ? 'C'
-        : currentAvg >= 60
-        ? 'D'
-        : 'F'
-    return { totalWeight, earnedWeighted, currentAvg, remainingWeight, neededOnRemaining, letter }
+    return { totalWeight, earnedWeighted, currentAvg, remainingWeight, neededOnRemaining }
   }, [gradeItems, targetGrade])
-
-  const moveCalendar = (direction) =>
-    setCalendarDate((current) => {
-      const next = new Date(current)
-      if (view === 'Day') next.setDate(next.getDate() + direction)
-      else if (view === 'Week') next.setDate(next.getDate() + 7 * direction)
-      else {
-        next.setDate(1)
-        next.setMonth(next.getMonth() + direction)
-      }
-      return next
-    })
-
-  const toggleAmbient = async (name) => {
-    if (soundName === name) {
-      clearInterval(soundRef.current?.interval)
-      audioRef.current?.close()
-      audioRef.current = null
-      soundRef.current = null
-      setSoundName('')
-      return
-    }
-    clearInterval(soundRef.current?.interval)
-    audioRef.current?.close()
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext
-    if (!AudioContextClass) {
-      setToast('This browser does not support ambient audio.')
-      return
-    }
-    const context = new AudioContextClass()
-    await context.resume()
-    const master = context.createGain()
-    master.gain.value = 0.09
-    master.connect(context.destination)
-    if (name === 'White noise' || name === 'Rain') {
-      const buffer = context.createBuffer(1, context.sampleRate * 3, context.sampleRate)
-      const samples = buffer.getChannelData(0)
-      for (let i = 0; i < samples.length; i += 1) {
-        const noise = Math.sin(i * 12.9898) * 43758.5453
-        const value = (noise - Math.floor(noise)) * 2 - 1
-        samples[i] = value * (name === 'Rain' ? 0.15 + (i % 17) / 34 : 0.7)
-      }
-      const source = context.createBufferSource()
-      source.buffer = buffer
-      source.loop = true
-      if (name === 'Rain') {
-        const filter = context.createBiquadFilter()
-        filter.type = 'lowpass'
-        filter.frequency.value = 1500
-        source.connect(filter)
-        filter.connect(master)
-      } else {
-        source.connect(master)
-      }
-      source.start()
-      soundRef.current = { source }
-    } else {
-      const frequencies = [
-        [130.81, 164.81, 196],
-        [110, 138.59, 164.81],
-        [98, 123.47, 146.83],
-        [116.54, 146.83, 174.61],
-      ]
-      const oscillators = frequencies[0].map((frequency) => {
-        const oscillator = context.createOscillator()
-        const gain = context.createGain()
-        oscillator.type = 'sine'
-        oscillator.frequency.value = frequency
-        gain.gain.value = 0.24
-        oscillator.connect(gain)
-        gain.connect(master)
-        oscillator.start()
-        return { oscillator, gain }
-      })
-      let chord = 0
-      const interval = window.setInterval(() => {
-        chord = (chord + 1) % frequencies.length
-        oscillators.forEach(({ oscillator }, index) => {
-          oscillator.frequency.setTargetAtTime(frequencies[chord][index], context.currentTime, 0.45)
-        })
-      }, 2800)
-      soundRef.current = { oscillators, interval }
-    }
-    audioRef.current = context
-    setSoundName(name)
-  }
-
-  useEffect(
-    () => () => {
-      clearInterval(soundRef.current?.interval)
-      audioRef.current?.close()
-    },
-    []
-  )
 
   return (
     <div className="section-page">
@@ -1334,51 +1178,23 @@ function SectionPage({
           <div className="eyebrow">YOUR WORKSPACE</div>
           <h1>{page}</h1>
           <p className="subheading">
-            {page === 'My schedule'
-              ? 'Make a little room for what matters.'
-              : page === 'My tasks'
+            {page === 'Tasks'
               ? 'Your plans, one small step at a time.'
-              : page === 'Flashcards'
-              ? 'Create active-recall cards and master tough concepts.'
-              : page === 'Study room'
-              ? 'A calmer place to do your best work.'
-              : page === 'Study materials'
-              ? 'Keep your PDFs, AI tutor prompts, and notes in one desk.'
+              : page === 'Study'
+              ? 'Focus timer and flashcards — one calm place to do your best work.'
+              : page === 'Materials'
+              ? 'Keep your PDFs in one desk.'
               : 'Track your weighted course average and target final score.'}
           </p>
         </div>
-        {page === 'My tasks' && (
+        {page === 'Tasks' && (
           <button className="primary-button" onClick={() => setShowAdd(true)}>
             ＋ Add a task
           </button>
         )}
       </div>
 
-      {page === 'My schedule' && (
-        <ScheduleCalendar
-          date={calendarDate}
-          view={view}
-          onView={setView}
-          onMove={moveCalendar}
-          onDateSelect={(date) => {
-            setCalendarDate(date)
-            setView('Day')
-          }}
-          subjects={[]}
-          tasks={tasks}
-          onCreateTask={(date) => setTaskEditor({ mode: 'create', initialDate: date })}
-          onEditTask={onEditTask}
-          onDeleteTask={setDeleteTarget}
-          onToggleTask={onToggleTask}
-          remindersEnabled={remindersEnabled}
-          reminderSoundEnabled={reminderSoundEnabled}
-          onReminderSoundSetting={onReminderSoundSetting}
-          notificationPermission={notificationPermission}
-          onNotificationSetting={onNotificationSetting}
-        />
-      )}
-
-      {page === 'My tasks' && (
+      {page === 'Tasks' && (
         <TaskList
           tasks={tasks}
           setTasks={setTasks}
@@ -1388,94 +1204,8 @@ function SectionPage({
         />
       )}
 
-      {page === 'Flashcards' && (
-        <div className="flash-layout anim-rise">
-          <div className="panel flash-summary">
-            <span className="summary-symbol mint">▤</span>
-            <h2>{dueCards.length} cards due today</h2>
-            <p>
-              {cards.length === 0
-                ? 'Add your first card on the right to start spaced-repetition practice.'
-                : 'Rate recall honestly—harder cards come back sooner automatically.'}
-            </p>
-            <button
-              className="primary-button"
-              disabled={dueCards.length === 0}
-              onClick={() => {
-                setReviewing(true)
-                setRevealed(false)
-              }}
-            >
-              Start studying ({dueCards.length}) <span>→</span>
-            </button>
-
-            <div className="deck-list">
-              {cards.map((card) => (
-                <div className="deck-line" key={card.id}>
-                  <div className="deck-copy">
-                    <strong>{card.front}</strong>
-                    <small>
-                      {card.subject} · {cardIsDue(card) ? 'Due now' : `Next: ${card.nextReview || 'scheduled'}`}
-                    </small>
-                  </div>
-                  <button
-                    type="button"
-                    className="icon-delete"
-                    aria-label="Delete flashcard"
-                    onClick={() => {
-                      setCards((prev) => prev.filter((c) => c.id !== card.id))
-                      setToast('Flashcard deleted.')
-                    }}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <form className="panel study-tip card-creator" onSubmit={addFlashcard}>
-            <span className="tip-icon">＋</span>
-            <div className="eyebrow">NEW FLASHCARD</div>
-            <h2>Add to your deck</h2>
-            <label>
-              Subject / Tag
-              <input
-                type="text"
-                value={cardSubject}
-                onChange={(e) => setCardSubject(e.target.value)}
-                placeholder="e.g. Biology, Algorithms"
-              />
-            </label>
-            <label>
-              Question (Front)
-              <textarea
-                rows={2}
-                required
-                value={cardFront}
-                onChange={(e) => setCardFront(e.target.value)}
-                placeholder="What is the powerhouse of the cell?"
-              />
-            </label>
-            <label>
-              Answer (Back)
-              <textarea
-                rows={2}
-                required
-                value={cardBack}
-                onChange={(e) => setCardBack(e.target.value)}
-                placeholder="Mitochondria — generates most chemical energy (ATP)."
-              />
-            </label>
-            <button type="submit" className="primary-button">
-              Save flashcard
-            </button>
-          </form>
-        </div>
-      )}
-
-      {page === 'Study room' && (
-        <div className="study-room-grid anim-rise">
+      {page === 'Study' && (
+        <div className="study-layout anim-rise">
           <div className="panel room-timer">
             <div className="focus-eyebrow">
               <span>✳</span> {timerMode === 'focus' ? 'YOUR FOCUS SPACE' : 'BREAK TIME'}
@@ -1529,46 +1259,160 @@ function SectionPage({
             </button>
           </div>
 
-          <div className="panel ambience">
-            <div className="note-icon">♫</div>
-            <h2>Set the mood</h2>
-            <p>Synthesized in your browser—zero external streaming needed.</p>
-            <div className="sound-options">
-              {[
-                ['☂', 'Rain'],
-                ['≋', 'White noise'],
-                ['♫', 'Lo-fi beats'],
-              ].map(([icon, name]) => (
-                <button
-                  type="button"
-                  key={name}
-                  className={soundName === name ? 'playing' : ''}
-                  aria-pressed={soundName === name}
-                  onClick={() =>
-                    toggleAmbient(name).catch(() => setToast('Could not start audio in this browser.'))
-                  }
-                >
-                  <span>{icon}</span>
-                  {name}
-                  {soundName === name && (
-                    <span className="eq-bars" aria-hidden="true">
-                      <i />
-                      <i />
-                      <i />
-                    </span>
-                  )}
-                  <small>{soundName === name ? '■ Stop' : '▶ Play'}</small>
-                </button>
+          <div className="panel flash-summary">
+            <span className="summary-symbol mint">▤</span>
+            <h2>{dueCards.length} cards due today</h2>
+            <p>
+              {cards.length === 0
+                ? 'Add your first card below to start spaced-repetition practice.'
+                : 'Rate recall honestly—harder cards come back sooner automatically.'}
+            </p>
+            <button
+              className="primary-button"
+              disabled={dueCards.length === 0}
+              onClick={() => {
+                setReviewing(true)
+                setRevealed(false)
+              }}
+            >
+              Start studying ({dueCards.length}) <span>→</span>
+            </button>
+
+            <div className="deck-list">
+              {cards.map((card) => (
+                <div className="deck-line" key={card.id}>
+                  <div className="deck-copy">
+                    <strong>{card.front}</strong>
+                    <small>
+                      {card.subject} · {cardIsDue(card) ? 'Due now' : `Next: ${card.nextReview || 'scheduled'}`}
+                    </small>
+                  </div>
+                  <button
+                    type="button"
+                    className="icon-delete"
+                    aria-label="Delete flashcard"
+                    onClick={() => {
+                      setCards((prev) => prev.filter((c) => c.id !== card.id))
+                      setToast('Flashcard deleted.')
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
               ))}
             </div>
-            <p className="muted">
-              {soundName ? `${soundName} is playing. Tap it again to stop.` : 'Choose an ambient track to focus.'}
-            </p>
           </div>
+
+          <div className="panel study-stats">
+            <div className="eyebrow">TODAY’S FOCUS</div>
+            <h2>Focus today</h2>
+            <div className="study-big">
+              {focusMinutesToday}
+              <span> min today · {focusStats.sessionsToday} {focusStats.sessionsToday === 1 ? 'session' : 'sessions'}</span>
+            </div>
+            <p>
+              {focusMinutesToday >= 50
+                ? 'Daily 50m goal crushed!'
+                : `${Math.max(0, 50 - focusMinutesToday)}m left to reach the 50m goal.`}
+            </p>
+            <div className="focus-progress" aria-hidden="true">
+              <i style={{ width: `${Math.min(100, (focusMinutesToday / 50) * 100)}%` }} />
+            </div>
+          </div>
+
+          <form className="panel study-tip card-creator" onSubmit={addFlashcard}>
+            <span className="tip-icon">＋</span>
+            <div className="eyebrow">NEW FLASHCARD</div>
+            <h2>Add to your deck</h2>
+            <label>
+              Subject / Tag
+              <input
+                type="text"
+                value={cardSubject}
+                onChange={(e) => setCardSubject(e.target.value)}
+                placeholder="e.g. Biology, Algorithms"
+              />
+            </label>
+            <label>
+              Question (Front)
+              <textarea
+                rows={2}
+                required
+                value={cardFront}
+                onChange={(e) => setCardFront(e.target.value)}
+                placeholder="What is the powerhouse of the cell?"
+              />
+            </label>
+            <label>
+              Answer (Back)
+              <textarea
+                rows={2}
+                required
+                value={cardBack}
+                onChange={(e) => setCardBack(e.target.value)}
+                placeholder="Mitochondria — generates most chemical energy (ATP)."
+              />
+            </label>
+            <button type="submit" className="primary-button">
+              Save flashcard
+            </button>
+          </form>
         </div>
       )}
 
-      {page === 'Grade tracker' && (
+      {page === 'Materials' && (
+        <div className="materials-grid anim-rise">
+          <section className="panel upload-panel">
+            <span className="summary-symbol purple">▧</span>
+            <h2>Your study materials</h2>
+            <p>Preview course PDFs right inside your browser without uploading to any server.</p>
+            <label className="upload-zone">
+              <input
+                type="file"
+                accept="application/pdf"
+                onChange={(event) => {
+                  const selected = event.target.files?.[0] || null
+                  setFile(selected)
+                  setPdfUrl(selected ? URL.createObjectURL(selected) : '')
+                }}
+              />
+              <span>↑</span>
+              <strong>{file ? file.name : 'Choose a PDF to get started'}</strong>
+              <small>
+                {file ? `${(file.size / 1024 / 1024).toFixed(2)} MB · selected` : 'Click to browse · PDF files'}
+              </small>
+            </label>
+            {file && (
+              <button
+                className="inline-link"
+                onClick={() => {
+                  setFile(null)
+                  setPdfUrl('')
+                }}
+              >
+                Remove file
+              </button>
+            )}
+          </section>
+
+          {file && (
+            <section className="panel pdf-panel">
+              <div className="panel-heading">
+                <div>
+                  <h2>{file.name}</h2>
+                  <p>PDF preview · rendered by your browser</p>
+                </div>
+                <a className="inline-link" href={pdfUrl} target="_blank" rel="noreferrer">
+                  Open separately ↗
+                </a>
+              </div>
+              <iframe title="PDF study material" src={pdfUrl} />
+            </section>
+          )}
+        </div>
+      )}
+
+      {page === 'Grades' && (
         <div className="grade-grid anim-rise">
           <div className="panel grade-card">
             <div className="eyebrow">COURSE GRADE TRACKER</div>
@@ -1648,7 +1492,7 @@ function SectionPage({
             <h2>Current weighted average</h2>
             <div className="grade-result">
               <small>
-                WEIGHT ACCOUNTED: {gradeStats.totalWeight.toFixed(0)}% · GRADE {gradeStats.letter}
+                WEIGHT ACCOUNTED: {gradeStats.totalWeight.toFixed(0)}%
               </small>
               <strong>{gradeStats.currentAvg != null ? `${gradeStats.currentAvg.toFixed(1)}%` : '—'}</strong>
               <span>
@@ -1687,81 +1531,10 @@ function SectionPage({
         </div>
       )}
 
-      {page === 'Study materials' && (
-        <div className="materials-grid anim-rise">
-          <section className="panel upload-panel">
-            <span className="summary-symbol purple">▧</span>
-            <h2>Your study materials</h2>
-            <p>Preview course PDFs right inside your browser without uploading to any server.</p>
-            <label className="upload-zone">
-              <input
-                type="file"
-                accept="application/pdf"
-                onChange={(event) => {
-                  const selected = event.target.files?.[0] || null
-                  setFile(selected)
-                  setPdfUrl(selected ? URL.createObjectURL(selected) : '')
-                }}
-              />
-              <span>↑</span>
-              <strong>{file ? file.name : 'Choose a PDF to get started'}</strong>
-              <small>
-                {file ? `${(file.size / 1024 / 1024).toFixed(2)} MB · selected` : 'Click to browse · PDF files'}
-              </small>
-            </label>
-            {file && (
-              <button
-                className="inline-link"
-                onClick={() => {
-                  setFile(null)
-                  setPdfUrl('')
-                }}
-              >
-                Remove file
-              </button>
-            )}
-          </section>
-
-          <AITutor />
-
-          {file && (
-            <section className="panel pdf-panel">
-              <div className="panel-heading">
-                <div>
-                  <h2>{file.name}</h2>
-                  <p>PDF preview · rendered by your browser</p>
-                </div>
-                <a className="inline-link" href={pdfUrl} target="_blank" rel="noreferrer">
-                  Open separately ↗
-                </a>
-              </div>
-              <iframe title="PDF study material" src={pdfUrl} />
-            </section>
-          )}
-
-          <section className="panel quick-note">
-            <div className="note-heading">
-              <div className="note-icon">✎</div>
-              <div>
-                <h2>Synced study scratchpad</h2>
-                <p>Automatically shares with your Overview daily note.</p>
-              </div>
-            </div>
-            <textarea
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              placeholder="Jot down a question, a definition, or what you want to remember..."
-            />
-            <small className="muted">Saved automatically on this device.</small>
-          </section>
-        </div>
-      )}
-
-      <button className="back-link" onClick={() => setPage('Overview')}>
-        ← Back to your overview
+      <button className="back-link" onClick={() => setPage('Today')}>
+        ← Back to Today
       </button>
-      </div>
-    </>
+    </div>
   )
 }
 
