@@ -8,6 +8,7 @@ import ScheduleCalendar from './components/ScheduleCalendar.jsx'
 import TaskEditor from './components/TaskEditor.jsx'
 import TaskDeleteDialog from './components/TaskDeleteDialog.jsx'
 import TaskList from './components/TaskList.jsx'
+import CustomCursor from './components/CustomCursor.jsx'
 import { expandTaskOccurrences, localDateKey, saveCalendarTask, deleteCalendarTask } from './services/calendarTasks.js'
 import { connectGoogle, preloadGoogleIdentity, revokeGoogleToken, saveGoogleData } from './services/googleDrive.js'
 
@@ -517,7 +518,9 @@ function App() {
   }
 
   return (
-    <div className={`app-shell${dark ? ' dark' : ''}`}>
+    <>
+      <CustomCursor />
+      <div className={`app-shell${dark ? ' dark' : ''}`}>
       <aside className="sidebar">
         <a
           className="brand"
@@ -1757,7 +1760,8 @@ function SectionPage({
       <button className="back-link" onClick={() => setPage('Overview')}>
         ← Back to your overview
       </button>
-    </div>
+      </div>
+    </>
   )
 }
 
