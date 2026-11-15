@@ -1,0 +1,65 @@
+/* CustomCursor.css — Midnight Focus edition for Check.
+   Change ONE line to re-theme it: --cursor-color below (lime #b8f53d).
+*/
+:root {
+  --cursor-color: #b8f53d;
+}
+
+.cursor-dot,
+.cursor-ring {
+  position: fixed;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 9999;
+  border-radius: 50%;
+  opacity: 0; /* shown by JS on first mouse move */
+  transition: opacity 0.2s ease;
+}
+
+.cursor-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--cursor-color);
+  box-shadow: 0 0 10px rgba(184, 245, 61, 0.8);
+}
+
+.cursor-ring {
+  width: 36px;
+  height: 36px;
+  border: 2px solid var(--cursor-color);
+  box-shadow: 0 0 16px rgba(184, 245, 61, 0.25);
+  transition:
+    width 0.2s ease,
+    height 0.2s ease,
+    background-color 0.2s ease,
+    box-shadow 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.cursor-ring--hover {
+  width: 56px;
+  height: 56px;
+  background: rgba(184, 245, 61, 0.12);
+  box-shadow: 0 0 24px rgba(184, 245, 61, 0.4);
+}
+
+.cursor-ring--press {
+  width: 28px;
+  height: 28px;
+}
+
+/* Hide the normal cursor only on mouse devices. */
+@media (pointer: fine) {
+  * {
+    cursor: none !important;
+  }
+}
+
+/* Touch screens and reduced-motion users keep the normal cursor. */
+@media (pointer: coarse), (prefers-reduced-motion: reduce) {
+  .cursor-dot,
+  .cursor-ring {
+    display: none;
+  }
+}

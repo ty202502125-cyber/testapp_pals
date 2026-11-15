@@ -1,13 +1,13 @@
-/* Marginalia — global base. Fonts: Bricolage Grotesque (display) + Atkinson Hyperlegible Next (body, built for legibility). */
-@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&display=swap');
+/* Midnight Focus — global base for Check. Fonts: Space Grotesk (display) + Inter (body). */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
 
 :root {
-  --f-body: 'Atkinson Hyperlegible Next', 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --f-display: 'Bricolage Grotesque', 'Atkinson Hyperlegible Next', system-ui, sans-serif;
+  --f-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --f-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
   font-family: var(--f-body);
   font-size: 16px;
-  color: #14172e;
-  background: #eef1f8;
+  color: #f2f5ff;
+  background: #070a1a;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -15,14 +15,14 @@
 }
 * { box-sizing: border-box; }
 html { min-width: 320px; min-height: 100%; scrollbar-gutter: stable; -webkit-text-size-adjust: 100%; }
-body { margin: 0; min-width: 320px; min-height: 100vh; }
+body { margin: 0; min-width: 320px; min-height: 100vh; background: #070a1a; }
 h1, h2, h3, p { margin-top: 0; }
 button, input, textarea, select { font: inherit; }
 button { color: inherit; }
 img, svg { max-width: 100%; }
 button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
-  outline: 3px solid #3346ee;
+  outline: 3px solid #b8f53d;
   outline-offset: 2px;
-  box-shadow: 0 0 0 6px #ffe14d99;
+  box-shadow: 0 0 0 6px rgba(184, 245, 61, .25);
 }
-::selection { background: #ffe14d; color: #14172e; }
+::selection { background: #b8f53d; color: #0b1000; }
