@@ -1,5 +1,5 @@
 /* ==========================================================================
-   MARGINALIA — feature components (PWA extras, AI tutor, calendar tasks)
+   MARGINALIA — feature components (PWA extras, calendar tasks)
    Uses the tokens defined on .app-shell in App.css.
    ========================================================================== */
 
@@ -14,59 +14,13 @@
 .privacy-note { display: block; margin-top: 16px; font-size: 12px; line-height: 1.55; color: var(--muted); }
 input::placeholder, textarea::placeholder { color: var(--muted); opacity: .8; }
 
-/* ---------- AI tutor ---------- */
-.tutor-panel { grid-column: 1 / -1; display: flex; flex-direction: column; min-height: 360px; padding: 22px; }
-.tutor-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.tutor-header h2 { margin: 4px 0; font-size: 24px; letter-spacing: -.5px; }
-.tutor-header p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--muted); }
-.tutor-badge { padding: 5px 12px; font-size: 12px; font-weight: 700; white-space: nowrap; color: var(--on-mark); background: var(--mark); border: 1.5px solid var(--edge); border-radius: 99px; }
-.tutor-messages { flex: 1; display: flex; flex-direction: column; gap: 12px; min-height: 140px; max-height: 340px; margin-top: 8px; padding: 14px 2px 10px; overflow: auto; }
-.tutor-welcome { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: auto; text-align: center; color: var(--cobalt); }
-.tutor-welcome > span { font-size: 30px; }
-.tutor-welcome strong { font: 700 17px var(--f-display); color: var(--ink); }
-.tutor-welcome small { max-width: 38ch; font-size: 14px; line-height: 1.5; color: var(--muted); }
-.tutor-message { max-width: 86%; padding: 10px 14px; align-self: flex-start; background: var(--line-2); border-radius: 4px 16px 16px 16px; }
-.tutor-message.user { align-self: flex-end; color: var(--on-cobalt); background: var(--cobalt); border-radius: 16px 4px 16px 16px; }
-.tutor-message > span { font-size: 12px; font-weight: 700; opacity: .75; }
-.tutor-message p { margin: 3px 0 0; font-size: 15px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; color: inherit; }
-.tutor-message .thinking { opacity: .7; }
-.tutor-error { margin: 0 0 8px; font-size: 14px; line-height: 1.5; color: var(--coral); }
-.tutor-compose { display: flex; align-items: flex-end; gap: 8px; padding: 8px; background: var(--paper); border: 1.5px solid var(--edge); border-radius: 14px; }
-.tutor-compose textarea { flex: 1; min-width: 0; min-height: 44px; max-height: 120px; padding: 8px; resize: vertical; font-size: 16px; line-height: 1.5; color: var(--ink); background: transparent; border: 0; outline: none; }
-.tutor-compose button { width: 44px; height: 44px; font-size: 20px; color: var(--on-cobalt); background: var(--cobalt); border: 0; border-radius: 10px; cursor: pointer; }
-.tutor-compose button:disabled { background: var(--line); color: var(--muted); }
-.tutor-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 10px; font-size: 13px; color: var(--muted); }
-.tutor-footer button { min-height: 36px; font-size: 13px; font-weight: 700; white-space: nowrap; color: var(--cobalt); background: none; border: 0; cursor: pointer; text-decoration: underline; }
-
 /* ---------- Account / sync ---------- */
-.account-modal { max-height: calc(100dvh - 28px); overflow: auto; }
-.account-modal .sync-status { margin: 14px 0; padding: 11px 14px; font-size: 14px; color: var(--cobalt); background: var(--cobalt-soft); border-radius: 10px; }
-.account-modal .sync-status.synced { color: var(--mint); background: var(--mint-soft); }
-.account-modal .sync-status.error { color: var(--coral); background: var(--coral-soft); }
 .secondary-action { width: 100%; min-height: 44px; padding: 9px 14px; font-size: 14px; font-weight: 700; color: var(--ink); background: var(--paper); border: 1.5px solid var(--line); border-radius: 10px; cursor: pointer; }
 .secondary-action:hover { border-color: var(--edge); background: var(--cobalt-soft); }
 .danger-button { min-height: 44px; padding: 9px 16px; font-weight: 700; color: #fff; background: var(--coral); border: 1.5px solid var(--edge); border-radius: 10px; box-shadow: var(--hard); cursor: pointer; }
 .dark .danger-button { color: #0f1226; }
 .delete-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 .delete-actions .secondary-action, .delete-actions .danger-button { width: auto; min-width: 104px; }
-
-/* ---------- Month view ---------- */
-.month-panel { padding: 14px; }
-.month-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
-.month-weekday { padding: 7px 2px; text-align: center; font-size: 13px; font-weight: 700; color: var(--muted); }
-.month-day { display: flex; flex-direction: column; min-width: 0; min-height: 96px; padding: 6px; overflow: hidden; overflow-wrap: anywhere; text-align: left; color: var(--ink); background: var(--paper); border: 1.5px solid var(--line); border-radius: 12px; cursor: pointer; transition: border-color .15s, background-color .15s; }
-.month-day:hover { border-color: var(--cobalt); background: var(--cobalt-soft); }
-.month-day.has-tasks { border-color: var(--ink-2); }
-.month-day.outside-month { color: var(--muted); background: transparent; border-style: dashed; opacity: .7; }
-.month-day.today { background: var(--mark); color: var(--on-mark); border-color: var(--edge); box-shadow: var(--hard); }
-.month-day-date { width: 100%; min-height: 28px; padding: 0 0 3px; font-size: 15px; font-weight: 800; text-align: left; color: inherit; background: transparent; border: 0; cursor: pointer; }
-.month-task-item { display: flex; align-items: center; gap: 2px; min-width: 0; margin-top: 3px; }
-.month-task-label { flex: 1; display: block; min-width: 0; margin: 0; padding: 2px 6px; overflow: hidden; text-align: left; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; color: var(--cobalt) !important; background: var(--cobalt-soft); border: 0; border-radius: 5px; cursor: pointer; }
-.today .month-task-label { background: #ffffffb0; color: #2634c9 !important; }
-.month-task-delete { flex: 0 0 24px; width: 24px; min-height: 26px; padding: 0; font-size: 16px; color: var(--coral); background: transparent; border: 0; border-radius: 5px; cursor: pointer; }
-.month-task-delete:hover { background: var(--coral-soft); }
-.month-more, .month-class-count { margin-top: 3px; padding: 2px 1px; font-size: 12px; color: var(--muted); background: transparent; border: 0; text-align: left; cursor: pointer; }
-.today .month-more, .today .month-class-count { color: var(--on-mark); }
 
 /* ---------- Notifications, day list, task actions ---------- */
 .notification-control { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; font-size: 14px; text-align: right; color: var(--muted); }
