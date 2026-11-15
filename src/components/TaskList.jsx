@@ -3,6 +3,15 @@ import { expandTaskOccurrences, formatDue, localDateKey } from '../services/cale
 
 export default function TaskList({ tasks, setTasks, onAdd, onEdit, onDelete }) {
   const [filter, setFilter] = useState('All')
+  // Delete slide-out: the row animates out for 240ms before the dialog opens.
+  const [exitingId, setExitingId] = useState(null)
+  const handleDelete = (task) => {
+    setExitingId(task.id)
+    window.setTimeout(() => {
+      setExitingId(null)
+      onDelete(task)
+    }, 240)
+  }
   const taskIsDone = (task) => task.recurrence?.frequency && task.recurrence.frequency !== 'none'
     ? (task.completedOccurrences || []).includes(localDateKey(new Date(task.dueAt)))
     : task.done
@@ -39,7 +48,9 @@ export default function TaskList({ tasks, setTasks, onAdd, onEdit, onDelete }) {
       {['All', 'Today', 'Overdue', 'Done'].map((item) => <button type="button" key={item} className={filter === item ? 'active' : ''} aria-pressed={filter === item} onClick={() => setFilter(item)}>{item} <span className="filter-count">{filters[item].length}</span></button>)}
     </div>
 
-    {visibleTasks.map((task) => <div className="task-row full-task" key={task.id}>
+    {/* key={filter} remounts the list on filter switch so rows slide in again. */}
+    <div className="task-list-animated" key={filter}>
+    {visibleTasks.map((task) => <div className={`task-row full-task${exitingId === task.id ? ' task-row-exiting' : ''}`} key={task.id}>
       <button type="button" className={`check-circle ${taskIsDone(task) ? 'checked' : ''}`} aria-label={taskIsDone
        (task) ? `Mark ${task.title} incomplete` : `Complete ${task.title}`} onClick={() => setTasks((items) => items.map((item) => {
         if (item.id !== task.id) return item
@@ -62,11 +73,12 @@ export default function TaskList({ tasks, setTasks, onAdd, onEdit, onDelete }) {
 
       <div className="task-list-actions">
         <button type="button" onClick={() => onEdit(task)}>Edit</button>
-        <button type="button" className="delete-task-action" onClick={() => onDelete(task)}>Delete</button>
+        <button type="button" className="delete-task-action" onClick={() => handleDelete(task)}>Delete</button>
       </div>
     </div>)}
 
     {!visibleTasks.length && <p className="empty-text">{emptyText[filter]}</p>}
+    </div>
     <button className="add-row" type="button" onClick={onAdd}>＋ <span>Add another task</span></button>
   </div>
 }

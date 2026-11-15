@@ -619,3 +619,180 @@ button:disabled { opacity: .55; cursor: not-allowed; }
   .summary-card, .timer-ring.running, .flashcard-inner { animation: none !important; }
   .summary-card:hover, .grade-card:hover, .flash-summary:hover, .room-timer:hover, .upload-panel:hover, .icon-button:hover { transform: none !important; box-shadow: none !important; }
 }
+
+/* ==========================================================================
+   ANIMATION PACK — section transitions, task feedback, timer, flashcards,
+   week strip, grades, modals & toasts (CSS only, no new packages)
+   All of these switch off under prefers-reduced-motion (see the guard at
+   the very end of this file).
+   ========================================================================== */
+
+/* Smooth timer-ring fill: register --progress as an angle so its 1s
+   transition interpolates instead of jumping once per second. Browsers
+   without @property support ignore this and keep the per-second step. */
+@property --progress {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 360deg;
+}
+.timer-ring { transition: --progress 1s linear, filter .3s ease; }
+
+/* ---------- 1. Section / page transitions ---------- */
+@keyframes pageFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes sectionIn {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+/* .page-content remounts on every section switch (key={page} in App.jsx),
+   so this fade replays per section; the inner .anim-rise blocks stagger
+   on top of it. */
+.page-content { animation: pageFade .3s ease-out backwards; }
+.section-page { animation: sectionIn .45s var(--ease-spring) backwards; }
+
+/* ---------- 2. Task interactions ---------- */
+@keyframes rowIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes rowOut {
+  to { opacity: 0; transform: translateX(28px); }
+}
+@keyframes strikeDraw {
+  from { background-size: 0% 2px; }
+  to { background-size: 100% 2px; }
+}
+@keyframes taskDone {
+  0% { opacity: 1; }
+  40% { opacity: .45; }
+  100% { opacity: .6; }
+}
+/* New rows slide in on mount (new task added, page opened, filter switched). */
+.task-row { animation: rowIn .3s var(--ease-spring) backwards; }
+/* Today list: gentle per-row stagger, top 4 rows only. */
+.task-list .task-row:nth-child(2) { animation-delay: .04s; }
+.task-list .task-row:nth-child(3) { animation-delay: .08s; }
+.task-list .task-row:nth-child(4) { animation-delay: .12s; }
+/* Tasks page: rows re-mount (and re-enter) when the filter changes. */
+.task-list-animated .task-row:nth-child(2) { animation-delay: .04s; }
+.task-list-animated .task-row:nth-child(3) { animation-delay: .08s; }
+.task-list-animated .task-row:nth-child(4) { animation-delay: .12s; }
+.task-list-animated .task-row:nth-child(5) { animation-delay: .16s; }
+.task-list-animated .task-row:nth-child(6) { animation-delay: .2s; }
+/* Deleting: the row slides out (TaskList.jsx delays the dialog 240ms). */
+.task-row-exiting { animation: rowOut .24s ease-in forwards; }
+/* Checking off: the row dims and the strike line draws itself across.
+   (Replaces the static text-decoration line-through with an animated
+   gradient line; unchecking removes the class and restores the text.) */
+.task-row.task-done { animation: taskDone .35s ease-out forwards; }
+.task-done .task-copy > strong {
+  color: var(--muted);
+  text-decoration: none;
+  background-image: linear-gradient(currentColor, currentColor);
+  background-size: 100% 2px;
+  background-position: 0 55%;
+  background-repeat: no-repeat;
+  animation: strikeDraw .3s ease-out;
+}
+
+/* Filter pills: the newly active pill pops. */
+@keyframes pillPop {
+  0% { transform: scale(.92); }
+  60% { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+.filter-pills button.active, .preset-pills button.active { animation: pillPop .28s var(--ease-spring); }
+.filter-pills button.active .filter-count { animation: pillPop .28s var(--ease-spring); }
+
+/* ---------- 3. Focus timer ---------- */
+@keyframes completeGlow {
+  0% { box-shadow: 0 0 0 0 rgba(184, 245, 61, 0); filter: brightness(1); }
+  30% { box-shadow: 0 0 42px 12px rgba(184, 245, 61, .5); filter: brightness(1.25); }
+  100% { box-shadow: 0 0 0 0 rgba(184, 245, 61, 0); filter: brightness(1); }
+}
+/* Applied for ~2.6s when a session ends (App.jsx sessionGlow state).
+   Box-shadow/filter only — the ring's rotate(-90deg) transform is untouched. */
+.timer-ring.session-complete { animation: completeGlow 2.4s ease-out; }
+/* Start / Pause press bounce (wins over the base :active transform). */
+.focus-button:active:not(:disabled) { animation: btnBounce .3s var(--ease-spring); }
+@keyframes btnBounce {
+  0% { transform: scale(1); }
+  40% { transform: scale(.93); }
+  100% { transform: scale(1); }
+}
+
+/* ---------- 4. Flashcards ---------- */
+/* Smoother flip: a touch longer with the spring ease, plus a press cue. */
+.flashcard-inner { transition: transform .45s var(--ease-spring); will-change: transform; }
+.flashcard-stage { transition: transform .15s ease; }
+.flashcard-stage:active { transform: scale(.985); }
+/* Rating buttons pop in one by one once the answer is revealed. */
+@keyframes rateIn {
+  from { opacity: 0; transform: translateY(10px) scale(.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.rating-row button { animation: rateIn .3s var(--ease-spring) backwards; }
+.rating-row button:nth-child(2) { animation-delay: .05s; }
+.rating-row button:nth-child(3) { animation-delay: .1s; }
+.rating-row button:nth-child(4) { animation-delay: .15s; }
+
+/* ---------- 5. Week strip ---------- */
+@keyframes todayGlow {
+  0%, 100% { box-shadow: 0 0 14px rgba(184, 245, 61, .18); }
+  50% { box-shadow: 0 0 26px 4px rgba(184, 245, 61, .42); }
+}
+.week-day.today { animation: todayGlow 2.6s ease-in-out infinite; }
+.week-day:active { transform: scale(.95); }
+
+/* ---------- 6. Grades ---------- */
+@keyframes barGrow {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@keyframes resultPop {
+  0% { transform: scale(.96); }
+  60% { transform: scale(1.015); }
+  100% { transform: scale(1); }
+}
+/* Bars grow from the left on mount (inline width is untouched). */
+.grade-example > div i, .focus-progress i {
+  transform-origin: left;
+  animation: barGrow .7s var(--ease-spring) backwards;
+}
+.grade-result { animation: resultPop .45s var(--ease-spring) backwards; }
+.grade-avg { display: inline-block; }
+
+/* ---------- 7. Modals, toasts, buttons ---------- */
+@keyframes backdropFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes alarmIn {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.modal-backdrop { animation: backdropFade .22s ease-out backwards; }
+.alarm-toast { animation: alarmIn .32s var(--ease-spring) backwards; }
+/* Toast: keep the existing slide-in, just a touch softer/longer. */
+.toast { animation-duration: .3s; }
+/* Press shrink on the remaining buttons (primary/focus already have it). */
+.topbar-btn:active, .preset-pills button:active, .filter-pills button:active,
+.task-list-actions button:active, .day-task-actions button:active,
+.notification-control button:active { transform: scale(.95); }
+
+/* ---------- Reduced motion guard for this pack ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .page-content, .section-page, .task-row, .task-row-exiting,
+  .task-done .task-copy > strong, .filter-pills button.active,
+  .preset-pills button.active, .timer-ring.session-complete,
+  .focus-button:active:not(:disabled), .rating-row button,
+  .week-day.today, .grade-example > div i, .focus-progress i,
+  .grade-result, .modal-backdrop, .alarm-toast { animation: none !important; }
+  .week-day:active, .topbar-btn:active, .preset-pills button:active,
+  .filter-pills button:active, .task-list-actions button:active,
+  .day-task-actions button:active, .notification-control button:active,
+  .flashcard-stage:active { transform: none !important; }
+}
+
