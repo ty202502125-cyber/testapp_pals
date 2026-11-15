@@ -2,27 +2,31 @@ import { useEffect, useRef } from "react";
 import "./CustomCursor.css";
 
 /**
- * CustomCursor — animated dot + trailing ring cursor, Midnight Focus edition.
+ * CustomCursor — big single-dot cursor, Midnight Focus edition (v2).
  *
- * Frontend-only: no API / database changes needed. Drop this file in
- * src/components/CustomCursor.jsx, import its CSS, and render
- * <CustomCursor /> once at the top of your app (see INSTALL.md for the
- * exact lines for Check).
+ * Replaces the old dot + trailing ring: the ring lagged behind the
+ * pointer and the small dot was easy to miss, so this version is one
+ * large dot that follows the pointer exactly, with a white border and
+ * dark outline so it reads on dark areas AND on lime buttons.
  *
- * Colour: lime #b8f53d, set in CustomCursor.css (--cursor-color, one line).
+ * Frontend-only: no API / database changes. Render <CustomCursor />
+ * once at the top of the app (src/App.jsx already does).
  *
- * Safeguards (same as the original kit):
- * - Dot/ring stay invisible until the first mouse move (no dot stuck
+ * Colour: lime #b8f53d, set in CustomCursor.css (--cursor-color).
+ *
+ * Safeguards:
+ * - Dot stays invisible until the first mouse move (no dot stuck
  *   in the top-left corner on load).
  * - Hides when the mouse leaves the window, shows again on re-entry.
  * - Guarded e.target.closest() (mousemove target is not always an Element).
  * - Skips everything on touch devices and when the user prefers
  *   reduced motion — the normal cursor stays in both cases.
- * - Ring also reacts to mousedown (press) as well as hover.
+ *   (Under reduced motion the native cursor is NOT hidden either,
+ *   so the user is never left with no cursor at all.)
+ * - Dot grows over interactive elements and presses in on mousedown.
  */
 export default function CustomCursor() {
   const dotRef = useRef(null);
-  const ringRef = useRef(null);
 
   useEffect(() => {
     // Only run on real mouse devices, and respect reduced-motion.
@@ -30,58 +34,39 @@ export default function CustomCursor() {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
     const dot = dotRef.current;
-    const ring = ringRef.current;
-    if (!dot || !ring) return;
+    if (!dot) return;
 
-    let x = 0;
-    let y = 0;
-    let ringX = 0;
-    let ringY = 0;
     let shown = false;
-    let raf;
 
     const show = () => {
       if (shown) return;
       shown = true;
       dot.style.opacity = "1";
-      ring.style.opacity = "1";
     };
 
     const hide = () => {
       shown = false;
       dot.style.opacity = "0";
-      ring.style.opacity = "0";
     };
 
     const onMove = (e) => {
-      x = e.clientX;
-      y = e.clientY;
       show();
-      dot.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)`;
+      dot.style.transform = `translate3d(${e.clientX}px, ${e.clientY}px, 0) translate(-50%, -50%)`;
       const target = e.target instanceof Element ? e.target : null;
       const hovered = target?.closest(
         "a, button, input, select, textarea, label, [role='button']"
       );
-      ring.classList.toggle("cursor-ring--hover", Boolean(hovered));
+      dot.classList.toggle("cursor-dot--hover", Boolean(hovered));
     };
 
-    const onDown = () => ring.classList.add("cursor-ring--press");
-    const onUp = () => ring.classList.remove("cursor-ring--press");
-
-    const animate = () => {
-      // Lower = slower trailing. 0.15 is a smooth lag.
-      ringX += (x - ringX) * 0.15;
-      ringY += (y - ringY) * 0.15;
-      ring.style.transform = `translate3d(${ringX}px, ${ringY}px, 0) translate(-50%, -50%)`;
-      raf = requestAnimationFrame(animate);
-    };
+    const onDown = () => dot.classList.add("cursor-dot--press");
+    const onUp = () => dot.classList.remove("cursor-dot--press");
 
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mousedown", onDown);
     window.addEventListener("mouseup", onUp);
     document.addEventListener("mouseleave", hide);
     document.addEventListener("mouseenter", show);
-    raf = requestAnimationFrame(animate);
 
     return () => {
       window.removeEventListener("mousemove", onMove);
@@ -89,14 +74,8 @@ export default function CustomCursor() {
       window.removeEventListener("mouseup", onUp);
       document.removeEventListener("mouseleave", hide);
       document.removeEventListener("mouseenter", show);
-      cancelAnimationFrame(raf);
     };
   }, []);
 
-  return (
-    <>
-      <div ref={dotRef} className="cursor-dot" aria-hidden="true" />
-      <div ref={ringRef} className="cursor-ring" aria-hidden="true" />
-    </>
-  );
+  return <div ref={dotRef} className="cursor-dot" aria-hidden="true" />;
 }

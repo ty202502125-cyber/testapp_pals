@@ -1,12 +1,13 @@
-/* CustomCursor.css — Midnight Focus edition for Check.
-   Change ONE line to re-theme it: --cursor-color below (lime #b8f53d).
+/* CustomCursor.css — Midnight Focus edition for Check, v2.
+   Big single dot, no trailing ring: the ring lagged behind the pointer
+   and the small dot was easy to miss. Change ONE line to re-theme it:
+   --cursor-color below (lime #b8f53d).
 */
 :root {
   --cursor-color: #b8f53d;
 }
 
-.cursor-dot,
-.cursor-ring {
+.cursor-dot {
   position: fixed;
   top: 0;
   left: 0;
@@ -14,46 +15,43 @@
   z-index: 9999;
   border-radius: 50%;
   opacity: 0; /* shown by JS on first mouse move */
-  transition: opacity 0.2s ease;
-}
-
-.cursor-dot {
-  width: 12px;
-  height: 12px;
-  background: var(--cursor-color);
-  box-shadow:
-    0 0 12px rgba(184, 245, 61, 0.9),
-    0 0 28px rgba(184, 245, 61, 0.45);
-}
-
-.cursor-ring {
-  width: 44px;
-  height: 44px;
-  border: 2px solid var(--cursor-color);
-  box-shadow: 0 0 18px rgba(184, 245, 61, 0.35);
   transition:
+    opacity 0.2s ease,
     width 0.2s ease,
     height 0.2s ease,
-    background-color 0.2s ease,
-    box-shadow 0.2s ease,
-    opacity 0.2s ease;
+    box-shadow 0.2s ease;
+  /* Large lime dot with a white border and a dark outline, so it reads
+     on the dark navy background AND on lime buttons (same colour as
+     the dot) instead of disappearing into them. */
+  width: 22px;
+  height: 22px;
+  background: var(--cursor-color);
+  border: 3px solid #ffffff;
+  box-shadow:
+    0 0 0 2px rgba(7, 10, 26, 0.9),
+    0 0 18px rgba(184, 245, 61, 0.55),
+    0 0 42px rgba(184, 245, 61, 0.25);
 }
 
-.cursor-ring--hover {
-  width: 64px;
-  height: 64px;
-  background: rgba(184, 245, 61, 0.12);
-  box-shadow: 0 0 24px rgba(184, 245, 61, 0.4);
-}
-
-.cursor-ring--press {
+/* Grows over links, buttons, inputs and other interactive elements. */
+.cursor-dot--hover {
   width: 32px;
   height: 32px;
+  box-shadow:
+    0 0 0 2px rgba(7, 10, 26, 0.9),
+    0 0 24px rgba(184, 245, 61, 0.7),
+    0 0 56px rgba(184, 245, 61, 0.35);
+}
+
+/* Presses in while the mouse button is held down. */
+.cursor-dot--press {
+  width: 18px;
+  height: 18px;
 }
 
 /* Hide the normal cursor only on mouse devices with motion allowed.
-   (Reduced-motion users keep their normal cursor: the custom dot/ring
-   are hidden for them below, so hiding the native one too would leave
+   (Reduced-motion users keep their normal cursor: the custom dot
+   is hidden for them below, so hiding the native one too would leave
    no cursor at all.) */
 @media (pointer: fine) and (prefers-reduced-motion: no-preference) {
   * {
@@ -63,8 +61,7 @@
 
 /* Touch screens and reduced-motion users keep the normal cursor. */
 @media (pointer: coarse), (prefers-reduced-motion: reduce) {
-  .cursor-dot,
-  .cursor-ring {
+  .cursor-dot {
     display: none;
   }
 }
